@@ -33,9 +33,12 @@ Web dashboard for global administration of the Sonaiyaa platform. Allows adminis
 - **ValidationPage** — Driver KYC verification: view pending drivers, review uploaded documents (Cloudflare R2 presigned URLs), approve/reject
 - **CommandesPage** — Order management and monitoring
 - **RetraitsPage** — Driver withdrawal approval: list pending payout requests, trigger or reject GeniusPay payouts
+- **RemboursementsPage** — Clients ayant payé par Mobile Money une course ensuite annulée (`GET /admin/remboursements`) ; bouton « Marquer remboursé » (`POST /admin/remboursements/{course_id}/effectue`) une fois le remboursement fait hors plateforme.
+- **CoursesSuspectesPage** — Livraisons validées loin de l'adresse déclarée du client (`GET /admin/courses/suspectes`, seuil configurable) : fausse adresse ou fausse livraison à vérifier.
 - **TestAccountsPage** — Creates pre-verified test accounts (Partenaire / Livreur) for App Store / Play Store reviewers and internal QA. Phone numbers must start with `+224600` (an unallocated GN prefix, prevents impersonation if credentials leak). Has one-click presets for the Apple Reviewer accounts. Backed by `POST /admin/test-accounts`, `GET /admin/test-accounts`, `DELETE /admin/test-accounts/{user_id}`.
 
 ## Specific Rules
+- **Double authentification** : `POST /auth/login` d'un admin avec le bon mot de passe répond **401 `otp_required`** et envoie un code SMS ; la LoginPage affiche alors un champ « Code reçu par SMS » et rappelle `login(phone, password, otpCode)`. `api.login` ne passe **pas** par `handleResponse` (son traitement du 401 — déconnexion + redirection — casserait ce flux).
 - **Authentication**: The dashboard consumes the FastAPI API. Strictly handle JWT token expiration by cleanly redirecting to the Login page on a `401 Unauthorized` error.
 - **UI Architecture**: Follow a modular architecture based on reusable functional React components. Tailwind is used as the primary styling solution.
 - **API Layer**: All HTTP calls must go through `src/services/api.js` — do not use raw `fetch`/`axios` calls outside this service.

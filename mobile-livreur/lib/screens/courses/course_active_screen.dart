@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../providers/course_provider.dart';
 import '../../providers/location_provider.dart';
 import 'package:mobile_core/mobile_core.dart';
+import 'course_livree_screen.dart';
 
 /// Écran immersif pour une course en cours.
 /// Flux : ACCEPTÉE → EN_RECUPERATION → EN_LIVRAISON → TERMINÉE
@@ -44,26 +45,28 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
   // ── Données de chaque étape ──
   List<_StepData> get _steps => [
     _StepData(
-      title: 'En route vers le commerce',
+      title: 'En route vers l\'expéditeur',
       subtitle: _course.expediteurNom ?? 'Commerce',
       icon: Icons.directions_rounded,
-      actionLabel: 'Je suis arrivé au commerce',
+      actionLabel: 'Je suis chez l\'expéditeur',
       nextStatus: 'EN_RECUPERATION',
     ),
-    const _StepData(
+    _StepData(
       title: 'Récupération de la course',
-      subtitle: 'Présentez-vous au comptoir',
+      // Course cash réglée par l'expéditeur : il remet la part livreur ici.
+      subtitle: _course.montantCashARecuperer > 0
+          ? 'Récupérez ${AppCurrency.format(_course.montantCashARecuperer)} en espèces auprès de l\'expéditeur'
+          : 'Présentez-vous au comptoir',
       icon: Icons.storefront_rounded,
-      actionLabel: 'Course récupérée, en route !',
+      actionLabel: 'Colis récupéré',
       nextStatus: 'EN_LIVRAISON',
     ),
     _StepData(
       title: 'En livraison vers le client',
       subtitle: _course.adresseClient ?? 'Adresse non renseignée',
       icon: Icons.delivery_dining_rounded,
-      actionLabel: _course.modePaiement == 'CASH'
-          ? 'Confirmer le paiement et la livraison'
-          : 'Livraison effectuée',
+      // Le client ne paie plus le livreur : rien à encaisser à la porte.
+      actionLabel: 'Livraison effectuée',
       nextStatus: 'TERMINEE',
     ),
     const _StepData(
@@ -143,49 +146,10 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
   }
 
   void _showCompletionDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64, height: 64,
-                decoration: const BoxDecoration(
-                  color: AppTheme.successLight,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check_rounded, color: AppTheme.success, size: 36),
-              ),
-              const SizedBox(height: 20),
-              const Text('Bravo !', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-              const SizedBox(height: 8),
-              Text(
-                _course.modePaiement == 'CASH'
-                    ? 'Livraison effectuée et paiement encaissé.\nVous avez gagné ${AppCurrency.format(_course.montantLivreur)}'
-                    : 'Livraison effectuée avec succès.\nVous avez gagné ${AppCurrency.format(_course.montantLivreur)}',
-                style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.5),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Retour à l\'accueil'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    // Le moment « Course livrée » remplace l'écran de course : retour = accueil.
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => CourseLivreeScreen(course: _course)),
     );
   }
 
@@ -359,304 +323,164 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
     await launchUrl(googleUrl, mode: LaunchMode.externalApplication);
   }
 
+  void _openMap() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(ctx).size.height * 0.75,
+        decoration: const BoxDecoration(
+          color: AppTheme.cardBg,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusXl)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: _buildMap(),
+      ),
+    );
+  }
+
+  String? _heure(DateTime? d) =>
+      d == null ? null : '${d.toLocal().hour.toString().padLeft(2, '0')}:${d.toLocal().minute.toString().padLeft(2, '0')}';
+
   @override
   Widget build(BuildContext context) {
     final currentStep = _steps[_step.clamp(0, _steps.length - 1)];
+    final chezExpediteur = !_isDone && _step <= 1;
+    final chezClient = !_isDone && _step == 2;
 
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Header (fixe) ──
+            // ── En-tête : retour · gains · carte ──
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back_rounded),
-                    onPressed: () => Navigator.pop(context),
+                  _RoundButton(
+                    icon: Icons.arrow_back_rounded,
+                    semanticLabel: 'Retour',
+                    onTap: () => Navigator.pop(context),
                   ),
-                  Expanded(
-                    child: Text(_course.numeroCourse, style: Theme.of(context).textTheme.titleLarge),
-                  ),
-                  if (_course.status.toUpperCase() == 'ACCEPTEE')
-                    _cancelling 
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : TextButton(
-                          onPressed: _cancelCourse,
-                          style: TextButton.styleFrom(foregroundColor: AppTheme.error),
-                          child: const Text('Annuler', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                        ),
                   const SizedBox(width: 12),
-                  Text(
-                    AppCurrency.format(_course.montantLivreur),
-                    style: AppTheme.mono(size: 18, weight: FontWeight.w800, color: AppTheme.accent, spacing: -0.3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Vos gains', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+                        Text(
+                          AppCurrency.format(_course.montantLivreur),
+                          style: AppTheme.mono(size: 20, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -0.3),
+                        ),
+                      ],
+                    ),
                   ),
+                  if (!_isDone)
+                    _PillButton(icon: Icons.map_outlined, label: 'Carte', onTap: _openMap),
                 ],
               ),
             ),
 
-            // ── Stepper visuel (fixe) ──
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: _ProgressBar(step: _step, total: 3),
-            ),
-
-            // ── Contenu scrollable ──
+            // ── La frise de course : Acceptée → Expéditeur → Client ──
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.only(top: 20, bottom: 12),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // ── Mini-carte avec position livreur + destination ──
-                    if (!_isDone)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                          child: SizedBox(
-                            height: 220,
-                            child: _buildMap(),
-                          ),
-                        ),
-                      ),
-                    if (!_isDone) const SizedBox(height: 20),
-
-                    // ── Carte étape actuelle ──
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 300),
-                        child: Container(
-                          key: ValueKey(_step),
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            gradient: _isDone ? null : AppTheme.accentGradient,
-                            color: _isDone ? AppTheme.success : null,
-                            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                            boxShadow: [
-                              BoxShadow(
-                                color: (_isDone ? AppTheme.success : AppTheme.accent).withValues(alpha: 0.28),
-                                blurRadius: 20,
-                                spreadRadius: -6,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            children: [
-                              Icon(currentStep.icon, color: AppTheme.white, size: 36),
-                              const SizedBox(height: 12),
-                              Text(
-                                currentStep.title,
-                                style: const TextStyle(color: AppTheme.white, fontSize: 18, fontWeight: FontWeight.w700),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                currentStep.subtitle,
-                                style: const TextStyle(color: Colors.white60, fontSize: 13, height: 1.4),
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    _FriseEtape(
+                      etat: _EtatEtape.faite,
+                      child: _EtapeResume(titre: 'Course acceptée', detail: _heure(_course.accepteeAt) ?? _course.numeroCourse),
                     ),
-
-                    const SizedBox(height: 20),
-
-                    // ── Timeline compacte ──
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        children: List.generate(_steps.length, (i) {
-                          final s = _steps[i];
-                          final done = i < _step;
-                          final active = i == _step;
-                          return _TimelineRow(
-                            title: s.title,
-                            done: done || _isDone,
-                            active: active && !_isDone,
-                            isLast: i == _steps.length - 1,
-                          );
-                        }),
-                      ),
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // ── Infos contact ──
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppTheme.background,
-                          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                        ),
-                        child: Column(
-                          children: [
-                            _ContactRow(
-                              icon: Icons.storefront_rounded,
-                              label: _course.expediteurNom ?? 'Expediteur',
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (_step == 0) _SmallAction(
-                                    icon: Icons.navigation_rounded,
-                                    color: AppTheme.info,
-                                    onTap: _navigate,
-                                  ),
-                                ],
-                              ),
+                    _FriseEtape(
+                      etat: chezExpediteur ? _EtatEtape.active : _EtatEtape.faite,
+                      child: chezExpediteur
+                          ? _CarteEtape(
+                              label: _step == 0 ? 'Expéditeur · allez-y maintenant' : 'Expéditeur · vous êtes sur place',
+                              titre: _course.expediteurNom ?? 'Expéditeur',
+                              adresse: _course.expediteurAdresse,
+                              note: _course.descriptionColis,
+                              encadre: _course.montantCashARecuperer > 0
+                                  ? _Encadre(label: 'Espèces à récupérer', montant: AppCurrency.format(_course.montantCashARecuperer))
+                                  : const _Encadre(label: 'Payée par Mobile Money : vos gains sont crédités à la livraison'),
+                              actions: [
+                                _ActionSecondaire(icon: Icons.navigation_rounded, label: 'Itinéraire', onTap: _navigate),
+                              ],
+                            )
+                          : _EtapeResume(
+                              titre: 'Colis récupéré · ${_course.expediteurNom ?? 'Expéditeur'}',
+                              detail: _heure(_course.recupereeAt),
                             ),
-                            const Divider(height: 16),
-                            _ContactRow(
-                              icon: Icons.person_rounded,
-                              label: _course.contactClientNom,
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _SmallAction(
-                                    icon: Icons.phone_rounded,
-                                    color: AppTheme.success,
-                                    onTap: () => _callPhone(_course.contactClientTelephone),
-                                  ),
-                                  if (_step >= 2) ...[
-                                    const SizedBox(width: 8),
-                                    _SmallAction(
-                                      icon: Icons.navigation_rounded,
-                                      color: AppTheme.info,
-                                      onTap: _navigate,
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            if (_course.descriptionColis != null && _course.descriptionColis!.isNotEmpty) ...[
-                              const Divider(height: 16),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(Icons.inventory_2_outlined, size: 16, color: AppTheme.textTertiary),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      _course.descriptionColis!,
-                                      style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary, fontWeight: FontWeight.w500),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                            if (_course.instructionsSpeciales != null && _course.instructionsSpeciales!.isNotEmpty) ...[
-                              const Divider(height: 16),
-                              Row(
-                                children: [
-                                  const Icon(Icons.notes_rounded, size: 16, color: AppTheme.textTertiary),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      _course.instructionsSpeciales!,
-                                      style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary, fontStyle: FontStyle.italic),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
                     ),
-                    
-                    if (_course.exigeCodeLivraison)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12, left: 20, right: 20),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppTheme.warning.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                            border: Border.all(color: AppTheme.warning.withValues(alpha: 0.5)),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.lock_rounded, color: AppTheme.warning, size: 20),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Livraison Sécurisée : Un code PIN sera demandé au client.',
-                                  style: TextStyle(color: AppTheme.warning, fontSize: 13, fontWeight: FontWeight.w600),
+                    _FriseEtape(
+                      etat: chezClient ? _EtatEtape.active : (_isDone ? _EtatEtape.faite : _EtatEtape.aVenir),
+                      isLast: true,
+                      child: chezClient
+                          ? _CarteEtape(
+                              label: 'Client · livrez maintenant',
+                              titre: _course.contactClientNom,
+                              adresse: _course.adresseClient,
+                              note: _course.instructionsSpeciales,
+                              encadre: _course.exigeCodeLivraison
+                                  ? const _Encadre(label: 'Demandez au client le code à 4 chiffres reçu par SMS')
+                                  : null,
+                              actions: [
+                                _ActionSecondaire(
+                                  icon: Icons.phone_rounded,
+                                  label: 'Appeler',
+                                  onTap: () => _callPhone(_course.contactClientTelephone),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                    // ── Récap financier ──
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _FinancialSummary(course: _course),
+                                _ActionSecondaire(icon: Icons.navigation_rounded, label: 'Itinéraire', onTap: _navigate),
+                              ],
+                            )
+                          : _EtapeResume(
+                              titre: _isDone ? 'Livrée · ${_course.contactClientNom}' : 'Client · ${_course.contactClientNom}',
+                              detail: _isDone
+                                  ? _heure(_course.livreeAt)
+                                  : [
+                                      if (_course.distanceKm != null) '${_course.distanceKm!.toStringAsFixed(1).replaceAll('.', ',')} km de livraison',
+                                      if (_course.exigeCodeLivraison) 'code de livraison demandé',
+                                    ].join(' · '),
+                            ),
                     ),
+                    const SizedBox(height: 24),
+                    _FinancialSummary(course: _course),
+                    if (_course.status.toUpperCase() == 'ACCEPTEE') ...[
+                      const SizedBox(height: 16),
+                      Center(
+                        child: _cancelling
+                            ? const SizedBox(height: 48, child: Center(child: BrandDotsPulse(color: AppTheme.textSecondary)))
+                            : TextButton(
+                                onPressed: _cancelCourse,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppTheme.error,
+                                  minimumSize: const Size(48, 48),
+                                ),
+                                child: const Text('Annuler la course', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                              ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
 
-            // ── Bouton action principal (fixe en bas) ──
+            // ── Une seule action principale, en bas ──
             if (!_isDone)
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: _updating ? null : _advanceStep,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _step == 2 ? AppTheme.success : AppTheme.accent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
-                    ),
-                    child: _updating
-                        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: AppTheme.white, strokeWidth: 2))
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(_stepActionIcon, size: 20),
-                              const SizedBox(width: 10),
-                              Flexible(
-                                child: Text(
-                                  currentStep.actionLabel,
-                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: PrimaryCta(
+                  label: currentStep.actionLabel,
+                  loading: _updating,
+                  onPressed: _advanceStep,
                 ),
               ),
-
-            if (_isDone) const SizedBox(height: 20),
           ],
         ),
       ),
     );
-  }
-
-  IconData get _stepActionIcon {
-    switch (_step) {
-      case 0: return Icons.location_on_rounded;
-      case 1: return Icons.inventory_2_rounded;
-      case 2: return Icons.check_circle_rounded;
-      default: return Icons.check_rounded;
-    }
   }
 }
 
@@ -670,127 +494,255 @@ class _StepData {
   const _StepData({required this.title, required this.subtitle, required this.icon, required this.actionLabel, required this.nextStatus});
 }
 
-// ── Barre de progression ──
-class _ProgressBar extends StatelessWidget {
-  final int step;
-  final int total;
-  const _ProgressBar({required this.step, required this.total});
+// ── Frise verticale (signature Sönaiyaa) ──
+enum _EtatEtape { faite, active, aVenir }
+
+class _FriseEtape extends StatelessWidget {
+  final _EtatEtape etat;
+  final Widget child;
+  final bool isLast;
+  const _FriseEtape({required this.etat, required this.child, this.isLast = false});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: List.generate(total, (i) {
-        final done = i < step;
-        final active = i == step;
-        return Expanded(
-          child: Container(
-            margin: EdgeInsets.only(right: i < total - 1 ? 4 : 0),
-            height: 4,
-            decoration: BoxDecoration(
-              color: done
-                  ? AppTheme.success
-                  : active
-                      ? AppTheme.accent
-                      : AppTheme.divider,
-              borderRadius: BorderRadius.circular(2),
-            ),
+    Widget point;
+    switch (etat) {
+      case _EtatEtape.faite:
+        point = Container(
+          width: 28,
+          height: 28,
+          decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle),
+          child: const Icon(Icons.check_rounded, size: 18, color: AppTheme.white),
+        );
+      case _EtatEtape.active:
+        point = Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: AppTheme.accent,
+            shape: BoxShape.circle,
+            boxShadow: [BoxShadow(color: AppTheme.accent.withValues(alpha: 0.2), spreadRadius: 6)],
           ),
         );
-      }),
-    );
-  }
-}
-
-// ── Timeline row ──
-class _TimelineRow extends StatelessWidget {
-  final String title;
-  final bool done;
-  final bool active;
-  final bool isLast;
-  const _TimelineRow({required this.title, required this.done, required this.active, required this.isLast});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Column(
-          children: [
-            Container(
-              width: 18, height: 18,
-              decoration: BoxDecoration(
-                color: done ? AppTheme.success : active ? AppTheme.accent : AppTheme.divider,
-                shape: BoxShape.circle,
-              ),
-              child: done
-                  ? const Icon(Icons.check_rounded, color: AppTheme.white, size: 12)
-                  : active
-                      ? Container(
-                          margin: const EdgeInsets.all(5),
-                          decoration: const BoxDecoration(color: AppTheme.white, shape: BoxShape.circle),
-                        )
-                      : null,
-            ),
-            if (!isLast) Container(width: 1.5, height: 20, color: done ? AppTheme.success.withValues(alpha: 0.3) : AppTheme.divider),
-          ],
-        ),
-        const SizedBox(width: 12),
-        Padding(
-          padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: done || active ? FontWeight.w600 : FontWeight.w400,
-              color: done || active ? AppTheme.textPrimary : AppTheme.textTertiary,
+      case _EtatEtape.aVenir:
+        point = Container(
+          width: 28,
+          height: 28,
+          decoration: BoxDecoration(
+            color: AppTheme.background,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppTheme.textPrimary, width: 3),
+          ),
+        );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: 28,
+            child: Column(
+              children: [
+                point,
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 3,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      color: etat == _EtatEtape.faite ? AppTheme.success : AppTheme.divider,
+                    ),
+                  ),
+              ],
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 16),
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+              child: child,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ── Contact row ──
-class _ContactRow extends StatelessWidget {
+class _EtapeResume extends StatelessWidget {
+  final String titre;
+  final String? detail;
+  const _EtapeResume({required this.titre, this.detail});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(titre, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+          if (detail != null && detail!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(detail!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Étape en cours, dépliée : où aller, quoi récupérer, et les actions secondaires.
+class _CarteEtape extends StatelessWidget {
+  final String label;
+  final String titre;
+  final String? adresse;
+  final String? note;
+  final _Encadre? encadre;
+  final List<_ActionSecondaire> actions;
+  const _CarteEtape({
+    required this.label,
+    required this.titre,
+    this.adresse,
+    this.note,
+    this.encadre,
+    this.actions = const [],
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        boxShadow: AppTheme.shadowMd,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.accentDark)),
+          const SizedBox(height: 4),
+          Text(titre, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+          if (adresse != null && adresse!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(adresse!, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.textPrimary, height: 1.35)),
+          ],
+          if (note != null && note!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(note!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.35)),
+          ],
+          if (encadre != null) ...[
+            const SizedBox(height: 12),
+            encadre!,
+          ],
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                for (var i = 0; i < actions.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(child: actions[i]),
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Encadre extends StatelessWidget {
+  final String label;
+  final String? montant;
+  const _Encadre({required this.label, this.montant});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.accentLight,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.accentDark, height: 1.35)),
+          ),
+          if (montant != null)
+            Text(montant!, style: AppTheme.mono(size: 15, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: 0)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionSecondaire extends StatelessWidget {
   final IconData icon;
   final String label;
-  final Widget trailing;
-  const _ContactRow({required this.icon, required this.label, required this.trailing});
+  final VoidCallback onTap;
+  const _ActionSecondaire({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: AppTheme.textSecondary),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500), maxLines: 1, overflow: TextOverflow.ellipsis),
+    return SizedBox(
+      height: 56,
+      child: OutlinedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 20),
+        label: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppTheme.textPrimary,
+          side: const BorderSide(color: AppTheme.divider, width: 2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
         ),
-        trailing,
-      ],
+      ),
     );
   }
 }
 
-// ── Petit bouton action ──
-class _SmallAction extends StatelessWidget {
+class _RoundButton extends StatelessWidget {
   final IconData icon;
-  final Color color;
+  final String semanticLabel;
   final VoidCallback onTap;
-  const _SmallAction({required this.icon, required this.color, required this.onTap});
+  const _RoundButton({required this.icon, required this.semanticLabel, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 36, height: 36,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
+    return Material(
+      color: AppTheme.cardBg,
+      shape: const CircleBorder(),
+      child: IconButton(
+        onPressed: onTap,
+        tooltip: semanticLabel,
+        icon: Icon(icon, color: AppTheme.textPrimary),
+        constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+      ),
+    );
+  }
+}
+
+class _PillButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _PillButton({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: TextButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+        label: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800)),
+        style: TextButton.styleFrom(
+          foregroundColor: AppTheme.textPrimary,
+          backgroundColor: AppTheme.cardBg,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          shape: const StadiumBorder(),
         ),
-        child: Icon(icon, size: 18, color: color),
       ),
     );
   }
@@ -932,15 +884,15 @@ class _FinancialSummary extends StatelessWidget {
           _FinLine(label: 'Prix de la course', value: AppCurrency.format(course.prixPropose)),
           const SizedBox(height: 8),
           _FinLine(
-            label: 'Commission plateforme',
+            label: 'Commission Sönaiyaa',
             value: '−${AppCurrency.format(course.commissionPlateforme)}',
-            valueColor: AppTheme.error,
+            valueColor: AppTheme.textSecondary,
           ),
           const SizedBox(height: 12),
           const Divider(height: 1),
           const SizedBox(height: 12),
           _FinLine(
-            label: 'Ma part',
+            label: 'Vos gains',
             value: AppCurrency.format(course.montantLivreur),
             valueColor: AppTheme.success,
             big: true,
@@ -960,8 +912,8 @@ class _FinancialSummary extends StatelessWidget {
                 Expanded(
                   child: Text(
                     _isCash
-                        ? 'Vous recevez ${AppCurrency.format(course.montantLivreur)} en espèces pour cette course.'
-                        : 'Course payée en ligne. Votre part est créditée sur vos Gains.',
+                        ? 'L\'expéditeur vous remet ${AppCurrency.format(course.montantLivreur)} en espèces à la récupération du colis.'
+                        : 'Course payée en ligne. Votre part est créditée sur vos Gains à la livraison.',
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppTheme.textSecondary,

@@ -29,4 +29,5 @@ export "widgets/empty_state.dart";
 export "widgets/onboarding_screen.dart";
 export "widgets/user_avatar.dart";
 export "widgets/brand_dots.dart";
+export "widgets/primary_cta.dart";
 export "widgets/animated_splash.dart";

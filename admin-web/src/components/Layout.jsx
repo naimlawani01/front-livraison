@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Truck, Store, Package, LogOut, Menu, X, Wallet, Users, ShieldCheck, FlaskConical } from 'lucide-react';
+import { LayoutDashboard, Truck, Store, Package, LogOut, Menu, X, Wallet, Users, ShieldCheck, FlaskConical, Undo2, AlertTriangle } from 'lucide-react';
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -10,6 +10,8 @@ const navItems = [
   { to: '/expediteurs', label: 'Expéditeurs', icon: Store },
   { to: '/courses', label: 'Courses', icon: Package },
   { to: '/retraits', label: 'Retraits', icon: Wallet },
+  { to: '/remboursements', label: 'Remboursements', icon: Undo2 },
+  { to: '/suspectes', label: 'Courses suspectes', icon: AlertTriangle },
   { to: '/users', label: 'Utilisateurs', icon: Users },
   { to: '/comptes-test', label: 'Comptes test', icon: FlaskConical },
 ];
