@@ -486,9 +486,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    _course.modePaiement == 'CASH'
-                                        ? 'Le client paie en espèces à la livraison'
-                                        : 'Paiement via Mobile Money',
+                                    _explicationPaiement,
                                     style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
                                   ),
                                 ],
@@ -535,6 +533,14 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                       ),
                     ],
                   ),
+                ),
+              ),
+
+              // ── Actions liées au paiement (payer, relancer, remboursement) ──
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                  child: _actionsPaiement(context),
                 ),
               ),
 
@@ -607,6 +613,10 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                           ],
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      _ligneMontant('Part du livreur (88 %)', _course.montantLivreur),
+                      const SizedBox(height: 4),
+                      _ligneMontant('Commission Sönaiyaa (12 %)', _course.commissionPlateforme),
                     ],
                   ),
                 ),
@@ -660,8 +670,21 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                   ),
                 ),
 
+              // ── Colis en main : annulation via le support uniquement ──
+              if (_course.status.toUpperCase() == 'EN_LIVRAISON')
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(20, 24, 20, 0),
+                    child: Text(
+                      'Le colis a été récupéré : pour annuler, contactez le support Sönaiyaa.',
+                      style: TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.4),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+
               // ── Bouton annuler la course ──
-              if (_isActive)
+              if (_isActive && _course.status.toUpperCase() != 'EN_LIVRAISON')
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
@@ -702,6 +725,21 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (_livreurEnRoute) ...[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningLight,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Un livreur est déjà en route : une indemnité de déplacement de '
+                    '3 000 GNF lui sera versée depuis votre Crédit.',
+                    style: TextStyle(fontSize: 13, color: AppTheme.textPrimary, height: 1.4),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
               const Text(
                 'Veuillez indiquer la raison de l\'annulation :',
                 style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
@@ -749,6 +787,126 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 
   // ── Helpers ──
   bool get _isDone => _course.status.toUpperCase() == 'TERMINEE';
+
+  bool get _livreurEnRoute {
+    final s = _course.status.toUpperCase();
+    return s == 'ACCEPTEE' || s == 'EN_RECUPERATION';
+  }
+
+  String get _explicationPaiement {
+    if (_course.isPayeurClient) {
+      return 'Votre client paie ${AppCurrency.format(_course.prixPropose)} par Mobile Money';
+    }
+    if (_course.isMobileMoney) {
+      return 'Vous réglez ${AppCurrency.format(_course.montantLivreur)} par Mobile Money';
+    }
+    return 'Vous remettez ${AppCurrency.format(_course.montantLivreur)} en espèces au livreur';
+  }
+
+  Widget _ligneMontant(String label, double montant) {
+    return Row(
+      children: [
+        Text(label, style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+        const Spacer(),
+        Text(
+          AppCurrency.format(montant),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+        ),
+      ],
+    );
+  }
+
+  Widget _actionsPaiement(BuildContext context) {
+    final enAttente = _course.status.toUpperCase() == 'CREEE';
+    final children = <Widget>[];
+
+    // Mobile Money réglé par l'expéditeur : bouton « Payer ».
+    if (enAttente && !_course.isPayeurClient && _course.isMobileMoney && !_course.isPaiementConfirme) {
+      children.add(SizedBox(
+        width: double.infinity,
+        height: 48,
+        child: ElevatedButton.icon(
+          onPressed: _payer,
+          icon: const Icon(Icons.phone_android_rounded, size: 18),
+          label: Text('Payer ${AppCurrency.format(_course.montantAEncaisser ?? _course.montantLivreur)}'),
+        ),
+      ));
+    }
+
+    // Course cash en attente (ex. Crédit insuffisant après le partage GPS).
+    if (enAttente && !_course.isMobileMoney && _course.isLocationShared) {
+      children.add(Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Course en attente : si votre Crédit était insuffisant, rechargez-le puis relancez la course.',
+            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.4),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: _relancerCourse,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Relancer la course'),
+            ),
+          ),
+        ],
+      ));
+    }
+
+    // Remboursement dû au client (course payée puis annulée).
+    if (_course.remboursementDu != null) {
+      children.add(Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppTheme.background,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          border: Border.all(color: AppTheme.divider),
+        ),
+        child: Text(
+          'Remboursement de ${AppCurrency.format(_course.remboursementDu!)} dû à votre client : '
+          'il est traité par Sönaiyaa.',
+          style: const TextStyle(fontSize: 13, color: AppTheme.textPrimary, height: 1.4),
+        ),
+      ));
+    }
+
+    if (children.isEmpty) return const SizedBox.shrink();
+    return Column(
+      children: [
+        for (final w in children) ...[w, const SizedBox(height: 8)],
+      ],
+    );
+  }
+
+  Future<void> _payer() async {
+    var url = _course.geniuspayCheckoutUrl;
+    try {
+      url ??= await context.read<CourseProvider>().relancerPaiement(_course.id);
+    } catch (e) {
+      if (mounted) UIUtils.showError(context, e.toString().replaceFirst('Exception: ', ''));
+      return;
+    }
+    if (url == null) return;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _relancerCourse() async {
+    final erreur = await context.read<CourseProvider>().rediffuserCourse(_course.id);
+    if (!mounted) return;
+    if (erreur == null) {
+      UIUtils.showSuccess(context, 'Course relancée : recherche d\'un livreur');
+      await _refresh();
+    } else {
+      UIUtils.showError(context, erreur);
+    }
+  }
 
   bool get _hasLivreurTrackingStatus {
     final s = _course.status.toUpperCase();

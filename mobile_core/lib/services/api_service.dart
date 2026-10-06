@@ -283,6 +283,29 @@ class ApiService {
     }
   }
 
+  /// Relance la diffusion d'une course cash restée en attente faute de Crédit
+  /// suffisant (après recharge). Lève une exception avec le message du backend
+  /// (ex. « Crédit insuffisant… ») sinon.
+  Future<Course> rediffuserCourse(String courseId) async {
+    final response = await _post('$baseUrl/courses/$courseId/diffuser');
+    if (response.statusCode == 200) {
+      return Course.fromJson(jsonDecode(response.body));
+    } else {
+      _throwHttpError(response, 'Impossible de relancer la course');
+    }
+  }
+
+  /// Régénère le lien de paiement Mobile Money d'une course (lien expiré, ou
+  /// course en attente de Crédit). Retourne `{reference, checkout_url}`.
+  Future<Map<String, dynamic>> relancerPaiement(String courseId) async {
+    final response = await _post('$baseUrl/payments/courses/$courseId/relancer');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    } else {
+      _throwHttpError(response, 'Impossible de relancer le paiement');
+    }
+  }
+
   Future<Map<String, dynamic>> estimerPrix(double lat, double lng, {String natureColis = 'standard'}) async {
     final response = await _post(
       '$baseUrl/courses/estimer-prix',

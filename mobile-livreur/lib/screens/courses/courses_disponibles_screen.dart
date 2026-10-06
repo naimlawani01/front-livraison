@@ -397,7 +397,9 @@ class _CourseCard extends StatelessWidget {
                       const SizedBox(height: 18),
                       _LocationInfo(
                         title: course.contactClientNom.toUpperCase(),
-                        subtitle: course.adresseClient ?? 'Localisation client',
+                        // Données du client masquées avant acceptation (backend) :
+                        // adresse, téléphone et consignes visibles une fois acceptée.
+                        subtitle: course.adresseClient ?? 'Adresse visible après acceptation',
                         isBold: true,
                       ),
                       if (course.descriptionColis != null && course.descriptionColis!.isNotEmpty) ...[

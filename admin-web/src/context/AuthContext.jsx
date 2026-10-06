@@ -21,10 +21,13 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const login = async (phone, password) => {
+  // Retourne 'otp_required' si le code SMS de double authentification est
+  // attendu (rappeler alors login avec otpCode), true si connecté.
+  const login = async (phone, password, otpCode = null) => {
     setLoading(true);
     try {
-      const data = await apiLogin(phone, password);
+      const data = await apiLogin(phone, password, otpCode);
+      if (data.otp_required) return 'otp_required';
       if (data.user.role !== 'ADMIN') {
         throw new Error('Accès réservé aux administrateurs');
       }

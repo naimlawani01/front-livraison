@@ -7,6 +7,8 @@ import LivreursPage from './pages/LivreursPage';
 import ExpediteursPage from './pages/ExpediteursPage';
 import CoursesPage from './pages/CoursesPage';
 import RetraitsPage from './pages/RetraitsPage';
+import RemboursementsPage from './pages/RemboursementsPage';
+import CoursesSuspectesPage from './pages/CoursesSuspectesPage';
 import UsersPage from './pages/UsersPage';
 import ValidationPage from './pages/ValidationPage';
 import TestAccountsPage from './pages/TestAccountsPage';
@@ -39,6 +41,8 @@ function AppRoutes() {
         <Route path="expediteurs" element={<ExpediteursPage />} />
         <Route path="courses" element={<CoursesPage />} />
         <Route path="retraits" element={<RetraitsPage />} />
+        <Route path="remboursements" element={<RemboursementsPage />} />
+        <Route path="suspectes" element={<CoursesSuspectesPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="validation" element={<ValidationPage />} />
         <Route path="comptes-test" element={<TestAccountsPage />} />

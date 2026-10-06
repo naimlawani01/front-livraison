@@ -6,12 +6,15 @@ class CourseProvider extends ChangeNotifier {
   
   List<Course> _courses = [];
   Course? _selectedCourse;
+  Course? _lastCreatedCourse;
   bool _isLoading = false;
   bool _isEstimating = false;
   String? _error;
 
   List<Course> get courses => _courses;
   Course? get selectedCourse => _selectedCourse;
+  /// Dernière course créée (pour adapter le message de confirmation).
+  Course? get lastCreatedCourse => _lastCreatedCourse;
   bool get isLoading => _isLoading;
   bool get isEstimating => _isEstimating;
   String? get error => _error;
@@ -70,6 +73,7 @@ class CourseProvider extends ChangeNotifier {
 
     try {
       final course = await _apiService.createCourse(data);
+      _lastCreatedCourse = course;
       _courses.insert(0, course);
       AnalyticsService.instance.logCourseCreated(
         courseId: course.id.toString(),
@@ -88,6 +92,33 @@ class CourseProvider extends ChangeNotifier {
       notifyListeners();
       return false;
     }
+  }
+
+  void _remplacer(Course course) {
+    final index = _courses.indexWhere((c) => c.id == course.id);
+    if (index != -1) _courses[index] = course;
+    if (_selectedCourse?.id == course.id) _selectedCourse = course;
+  }
+
+  /// Relance une course cash restée en attente faute de Crédit (après recharge).
+  /// Retourne null si OK, sinon le message d'erreur du backend.
+  Future<String?> rediffuserCourse(String courseId) async {
+    try {
+      final course = await _apiService.rediffuserCourse(courseId);
+      _remplacer(course);
+      notifyListeners();
+      return null;
+    } catch (e) {
+      return e.toString().replaceFirst('Exception: ', '');
+    }
+  }
+
+  /// Régénère le lien de paiement Mobile Money. Retourne l'URL, ou lève une
+  /// exception avec le message du backend (ex. Crédit insuffisant).
+  Future<String?> relancerPaiement(String courseId) async {
+    final res = await _apiService.relancerPaiement(courseId);
+    await loadCourseDetails(courseId);
+    return res['checkout_url'] as String?;
   }
 
   Future<void> loadCourseDetails(String courseId) async {

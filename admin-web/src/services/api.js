@@ -64,13 +64,24 @@ async function handleResponse(response) {
 }
 
 // Auth
-export async function login(phone, password) {
+// Double authentification admin : avec le bon mot de passe, le backend répond
+// 401 `otp_required` et envoie un code SMS ; il faut rappeler avec `otpCode`.
+// Ne PAS passer par handleResponse : son traitement du 401 (déconnexion +
+// redirection) casserait ce flux.
+export async function login(phone, password, otpCode = null) {
   const res = await fetch(`${BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, password }),
+    body: JSON.stringify({ phone, password, ...(otpCode ? { otp_code: otpCode } : {}) }),
   });
-  return handleResponse(res);
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && data.detail === 'otp_required') {
+    return { otp_required: true };
+  }
+  if (!res.ok) {
+    throw new Error(data.detail || 'Identifiants incorrects');
+  }
+  return data;
 }
 
 // Admin stats
@@ -177,6 +188,24 @@ export async function suspendreUser(id) {
 
 export async function supprimerUser(id) {
   const res = await authFetch(`${BASE_URL}/admin/users/${id}`, { method: 'DELETE' });
+  return handleResponse(res);
+}
+
+// Remboursements clients (Mobile Money payé puis course annulée)
+export async function getRemboursements(inclureTraites = false) {
+  const res = await authFetch(`${BASE_URL}/admin/remboursements?inclure_traites=${inclureTraites}`);
+  return handleResponse(res);
+}
+
+export async function marquerRembourse(courseId) {
+  const res = await authFetch(`${BASE_URL}/admin/remboursements/${courseId}/effectue`, { method: 'POST' });
+  return handleResponse(res);
+}
+
+// Anti-fraude : courses livrées loin de l'adresse déclarée
+export async function getCoursesSuspectes(seuilKm = null) {
+  const params = seuilKm != null ? `?seuil_km=${seuilKm}` : '';
+  const res = await authFetch(`${BASE_URL}/admin/courses/suspectes${params}`);
   return handleResponse(res);
 }
 

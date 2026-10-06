@@ -49,6 +49,17 @@ class Course {
   // Paiement
   final String modePaiement;
   final String paiementConfirme;
+  /// Qui règle la course : `expediteur` (remet la part livreur) ou `client`
+  /// (paie le prix complet en Mobile Money).
+  final String payeur;
+  /// Montant réglé par le payeur : prix complet si client, part livreur (88 %)
+  /// si expéditeur (sa commission est prise sur son Crédit).
+  final double? montantAEncaisser;
+  /// Lien de paiement Mobile Money (renvoyé à l'expéditeur quand c'est lui qui
+  /// paie ; jamais au livreur).
+  final String? geniuspayCheckoutUrl;
+  /// Montant payé par le client à rembourser (course payée puis annulée).
+  final double? remboursementDu;
 
   // Localisation client (lien)
   final String? locationToken;
@@ -97,6 +108,10 @@ class Course {
     this.livreurLongitude,
     this.modePaiement = 'CASH',
     this.paiementConfirme = 'non',
+    this.payeur = 'expediteur',
+    this.montantAEncaisser,
+    this.geniuspayCheckoutUrl,
+    this.remboursementDu,
     this.locationToken,
     this.locationSharedAt,
     this.trackingToken,
@@ -156,6 +171,10 @@ class Course {
       livreurLongitude: livreurData?['longitude']?.toDouble(),
       modePaiement: json['mode_paiement'] ?? 'CASH',
       paiementConfirme: json['paiement_confirme'] ?? 'non',
+      payeur: json['payeur'] ?? 'expediteur',
+      montantAEncaisser: (json['montant_a_encaisser'] as num?)?.toDouble(),
+      geniuspayCheckoutUrl: json['geniuspay_checkout_url'],
+      remboursementDu: (json['remboursement_du'] as num?)?.toDouble(),
       locationToken: json['location_token'],
       locationSharedAt: json['location_shared_at'] != null
           ? DateTime.parse(json['location_shared_at'])
@@ -167,6 +186,16 @@ class Course {
   }
 
   bool get hasClientLocation => latitudeClient != null && longitudeClient != null;
+  bool get isPayeurClient => payeur == 'client';
+  bool get isMobileMoney => modePaiement.toUpperCase() == 'MOBILE_MONEY';
+  bool get isPaiementConfirme => paiementConfirme == 'oui';
+
+  /// Montant que le livreur doit encaisser en espèces chez l'expéditeur
+  /// (course cash réglée par l'expéditeur) ; 0 sinon (Mobile Money → Gains).
+  double get montantCashARecuperer =>
+      (!isMobileMoney && !isPayeurClient) ? montantLivreur : 0;
+
+  String get payeurLabel => isPayeurClient ? 'Payée par le client' : 'Payée par l\'expéditeur';
   bool get isLocationShared => locationSharedAt != null;
 
   String get modePaiementLabel {

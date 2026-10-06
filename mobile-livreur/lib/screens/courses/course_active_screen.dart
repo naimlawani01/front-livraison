@@ -50,9 +50,12 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
       actionLabel: 'Je suis arrivé au commerce',
       nextStatus: 'EN_RECUPERATION',
     ),
-    const _StepData(
+    _StepData(
       title: 'Récupération de la course',
-      subtitle: 'Présentez-vous au comptoir',
+      // Course cash réglée par l'expéditeur : il remet la part livreur ici.
+      subtitle: _course.montantCashARecuperer > 0
+          ? 'Récupérez ${AppCurrency.format(_course.montantCashARecuperer)} en espèces auprès de l\'expéditeur'
+          : 'Présentez-vous au comptoir',
       icon: Icons.storefront_rounded,
       actionLabel: 'Course récupérée, en route !',
       nextStatus: 'EN_LIVRAISON',
@@ -61,9 +64,8 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
       title: 'En livraison vers le client',
       subtitle: _course.adresseClient ?? 'Adresse non renseignée',
       icon: Icons.delivery_dining_rounded,
-      actionLabel: _course.modePaiement == 'CASH'
-          ? 'Confirmer le paiement et la livraison'
-          : 'Livraison effectuée',
+      // Le client ne paie plus le livreur : rien à encaisser à la porte.
+      actionLabel: 'Livraison effectuée',
       nextStatus: 'TERMINEE',
     ),
     const _StepData(
@@ -166,8 +168,8 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
               const SizedBox(height: 8),
               Text(
                 _course.modePaiement == 'CASH'
-                    ? 'Livraison effectuée et paiement encaissé.\nVous avez gagné ${AppCurrency.format(_course.montantLivreur)}'
-                    : 'Livraison effectuée avec succès.\nVous avez gagné ${AppCurrency.format(_course.montantLivreur)}',
+                    ? 'Livraison effectuée.\nVous avez gagné ${AppCurrency.format(_course.montantLivreur)} (reçus en espèces chez l\'expéditeur)'
+                    : 'Livraison effectuée avec succès.\nVous avez gagné ${AppCurrency.format(_course.montantLivreur)} (crédités sur vos Gains)',
                 style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.5),
                 textAlign: TextAlign.center,
               ),
@@ -960,8 +962,8 @@ class _FinancialSummary extends StatelessWidget {
                 Expanded(
                   child: Text(
                     _isCash
-                        ? 'Vous recevez ${AppCurrency.format(course.montantLivreur)} en espèces pour cette course.'
-                        : 'Course payée en ligne. Votre part est créditée sur vos Gains.',
+                        ? 'L\'expéditeur vous remet ${AppCurrency.format(course.montantLivreur)} en espèces à la récupération du colis.'
+                        : 'Course payée en ligne. Votre part est créditée sur vos Gains à la livraison.',
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppTheme.textSecondary,

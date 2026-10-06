@@ -24,9 +24,14 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
   static const double _prixDefaut = 10000;
 
   String _modePaiement = 'CASH';
+  /// Qui règle la course : 'expediteur' (vous remettez la part livreur) ou
+  /// 'client' (il paie le prix complet par Mobile Money).
+  String _payeur = 'expediteur';
   double? _latClient;
   double? _lngClient;
-  bool _exigeCodeLivraison = false;
+  /// Activé par défaut : le code est envoyé au client par SMS, le livreur le
+  /// lui demande à la remise (empêche les fausses livraisons).
+  bool _exigeCodeLivraison = true;
   String _natureColis = 'standard';
   bool _isEstimating = false;
   Map<String, dynamic>? _estimation;
@@ -50,6 +55,33 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
     final estim = _estimation?['prix_estime'];
     if (estim is num) return estim.toDouble();
     return _prixDefaut;
+  }
+
+  /// (commission Sönaiyaa 12 %, part livreur 88 %) — valeurs du backend si
+  /// l'estimation est disponible, sinon calcul local sur le prix courant.
+  (double, double) get _repartition {
+    final c = _estimation?['commission_plateforme'];
+    final l = _estimation?['montant_livreur'];
+    if (c is num && l is num) return (c.toDouble(), l.toDouble());
+    final commission = (_prixCourant * 0.12).roundToDouble();
+    return (commission, _prixCourant - commission);
+  }
+
+  void _choisirPayeur(String payeur) {
+    setState(() {
+      _payeur = payeur;
+      // Un client ne règle jamais en espèces : la commission ne pourrait pas
+      // être récupérée (règle backend : client + cash → refusé).
+      if (payeur == 'client') _modePaiement = 'MOBILE_MONEY';
+    });
+  }
+
+  void _choisirMode(String mode) {
+    if (mode == 'CASH' && _payeur == 'client') {
+      UIUtils.showError(context, 'Si votre client paie la livraison, c\'est par Mobile Money.');
+      return;
+    }
+    setState(() => _modePaiement = mode);
   }
 
   void _clearServerErrors() {
@@ -79,6 +111,7 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
       'contact_client_telephone': telClient,
       'prix_propose': _prixCourant,
       'mode_paiement': _modePaiement,
+      'payeur': _payeur,
       'exige_code_livraison': _exigeCodeLivraison,
       'nature_colis': _natureColis,
     };
@@ -110,8 +143,24 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
   }
 
   Future<void> _showSuccessSheet(BuildContext context) async {
+    final course = context.read<CourseProvider>().lastCreatedCourse;
     final isMM = _modePaiement == 'MOBILE_MONEY';
+    final payeurClient = _payeur == 'client';
     final nomClient = _nomClientController.text.trim();
+    final partLivreur = course?.montantLivreur ?? _repartition.$2;
+    final String ligne1;
+    final String ligne2;
+    if (payeurClient) {
+      ligne1 = 'Un SMS de paiement a été envoyé à $nomClient.';
+      ligne2 = 'La course sera proposée aux livreurs dès que votre client a payé. '
+          'Votre commission vous sera alors rendue.';
+    } else if (isMM) {
+      ligne1 = 'Réglez ${AppCurrency.format(partLivreur)} par Mobile Money depuis le détail de la course.';
+      ligne2 = 'La course sera proposée aux livreurs dès que le paiement est confirmé.';
+    } else {
+      ligne1 = 'Un livreur disponible va être assigné à la course.';
+      ligne2 = 'Remettez-lui ${AppCurrency.format(partLivreur)} en espèces à la récupération du colis.';
+    }
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -136,17 +185,13 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
             const Text('Livraison créée !', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
             const SizedBox(height: 8),
             Text(
-              isMM
-                  ? 'Un SMS de paiement a été envoyé à $nomClient.'
-                  : 'Un livreur disponible va être assigné à la course.',
+              ligne1,
               style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.5),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              isMM
-                  ? 'La course sera diffusée aux livreurs dès que le paiement est confirmé.'
-                  : 'Vous serez notifié dès qu\'un livreur accepte la course.',
+              ligne2,
               style: const TextStyle(fontSize: 13, color: AppTheme.textTertiary, height: 1.4),
               textAlign: TextAlign.center,
             ),
@@ -346,19 +391,63 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
 
               const SizedBox(height: 32),
 
-              // ── Section Mode de paiement ─────────────────────────────
+              _RepartitionCard(
+                commission: _repartition.$1,
+                partLivreur: _repartition.$2,
+                prix: _prixCourant,
+                payeurClient: _payeur == 'client',
+                mobileMoney: _modePaiement == 'MOBILE_MONEY',
+              ),
+
+              const SizedBox(height: 32),
+
+              // ── Qui paie la livraison ────────────────────────────────
               const _SectionHeader(
-                title: 'Mode de paiement',
-                subtitle: 'Choisi par le client',
+                title: 'Qui paie la livraison ?',
+                subtitle: 'Vous, ou votre client par Mobile Money',
               ),
               Row(
                 children: [
                   Expanded(
                     child: _PaymentOption(
-                      icon: Icons.payments_outlined,
-                      label: 'Cash à la livraison',
-                      selected: _modePaiement == 'CASH',
-                      onTap: () => setState(() => _modePaiement = 'CASH'),
+                      icon: Icons.storefront_rounded,
+                      label: 'Moi',
+                      selected: _payeur == 'expediteur',
+                      onTap: () => _choisirPayeur('expediteur'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _PaymentOption(
+                      icon: Icons.person_rounded,
+                      label: 'Mon client',
+                      selected: _payeur == 'client',
+                      onTap: () => _choisirPayeur('client'),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 24),
+
+              // ── Section Mode de paiement ─────────────────────────────
+              _SectionHeader(
+                title: 'Mode de paiement',
+                subtitle: _payeur == 'client'
+                    ? 'Votre client reçoit un lien de paiement par SMS'
+                    : 'Comment vous réglez le livreur',
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Opacity(
+                      opacity: _payeur == 'client' ? 0.4 : 1,
+                      child: _PaymentOption(
+                        icon: Icons.payments_outlined,
+                        label: 'Espèces',
+                        selected: _modePaiement == 'CASH',
+                        onTap: () => _choisirMode('CASH'),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -367,7 +456,7 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
                       icon: Icons.phone_android_rounded,
                       label: 'Mobile Money',
                       selected: _modePaiement == 'MOBILE_MONEY',
-                      onTap: () => setState(() => _modePaiement = 'MOBILE_MONEY'),
+                      onTap: () => _choisirMode('MOBILE_MONEY'),
                     ),
                   ),
                 ],
@@ -420,7 +509,7 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              'Le livreur devra demander un code PIN au client pour valider la livraison.',
+                              'Un code est envoyé à votre client par SMS. Le livreur le lui demande à la remise du colis. Recommandé.',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: AppTheme.textSecondary,
@@ -612,6 +701,69 @@ class _PriceCard extends StatelessWidget {
               color: AppTheme.textSecondary,
               height: 1.4,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RepartitionCard extends StatelessWidget {
+  final double commission;
+  final double partLivreur;
+  final double prix;
+  final bool payeurClient;
+  final bool mobileMoney;
+
+  const _RepartitionCard({
+    required this.commission,
+    required this.partLivreur,
+    required this.prix,
+    required this.payeurClient,
+    required this.mobileMoney,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final String explication;
+    if (payeurClient) {
+      explication = 'Votre client paie ${AppCurrency.format(prix)} par Mobile Money. '
+          'La commission est bloquée sur votre Crédit puis vous est rendue dès qu\'il a payé : '
+          'la livraison ne vous coûte rien.';
+    } else if (mobileMoney) {
+      explication = 'Vous réglez ${AppCurrency.format(partLivreur)} par Mobile Money, '
+          'plus la commission prise sur votre Crédit.';
+    } else {
+      explication = 'Vous remettez ${AppCurrency.format(partLivreur)} en espèces au livreur '
+          'à la récupération, plus la commission prise sur votre Crédit.';
+    }
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.background,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: AppTheme.divider),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DetailRow(
+            icon: Icons.delivery_dining_rounded,
+            label: 'Part du livreur (88 %)',
+            value: AppCurrency.format(partLivreur),
+          ),
+          const SizedBox(height: 6),
+          _DetailRow(
+            icon: Icons.account_balance_wallet_outlined,
+            label: 'Commission Sönaiyaa (12 %)',
+            value: AppCurrency.format(commission),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            explication,
+            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.4),
           ),
         ],
       ),
