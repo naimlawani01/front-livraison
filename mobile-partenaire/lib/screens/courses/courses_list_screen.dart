@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../providers/course_provider.dart';
 import 'package:mobile_core/mobile_core.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/credit_provider.dart';
 import '../../widgets/course_card.dart';
 import 'create_course_screen.dart';
 
@@ -162,9 +163,12 @@ class _CoursesListScreenState extends State<CoursesListScreen> with WidgetsBindi
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-              child: context.watch<AuthProvider>().expediteur?.isVerified == true
-                  ? PrimaryCta(label: 'Nouvelle course', onPressed: _nouvelleCourse)
-                  : const PrimaryCta(label: 'Compte en cours de vérification', onPressed: null),
+              child: context.watch<AuthProvider>().expediteur?.isVerified != true
+                  ? const PrimaryCta(label: 'Compte en cours de vérification', onPressed: null)
+                  : context.watch<CreditProvider>().fraisRetourDus > 0
+                      // Frais de retour impayés : le backend refuserait la création.
+                      ? const PrimaryCta(label: 'Frais de retour à régler : rechargez', onPressed: null)
+                      : PrimaryCta(label: 'Nouvelle course', onPressed: _nouvelleCourse),
             ),
           ],
         ),

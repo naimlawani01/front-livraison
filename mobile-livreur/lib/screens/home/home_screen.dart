@@ -153,7 +153,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _toggling = false;
 
-  static const _statutsActifs = {'ACCEPTEE', 'EN_RECUPERATION', 'EN_LIVRAISON'};
+  static const _statutsActifs = {'ACCEPTEE', 'EN_RECUPERATION', 'EN_LIVRAISON', 'RETOUR'};
 
   Future<void> _onRefresh() async {
     await Future.wait([

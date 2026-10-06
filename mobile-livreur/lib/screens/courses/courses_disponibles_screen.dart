@@ -261,7 +261,7 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
   int _activeCount(CourseProvider provider) {
     return provider.mesCourses.where((c) {
       final s = c.status.toUpperCase();
-      return s == 'ACCEPTEE' || s == 'EN_RECUPERATION' || s == 'EN_LIVRAISON';
+      return s == 'ACCEPTEE' || s == 'EN_RECUPERATION' || s == 'EN_LIVRAISON' || s == 'RETOUR';
     }).length;
   }
 

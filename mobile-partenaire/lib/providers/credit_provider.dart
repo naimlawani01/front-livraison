@@ -7,6 +7,7 @@ class CreditProvider extends ChangeNotifier {
   final ApiService _api = ApiService();
 
   double _solde = 0;
+  double _fraisRetourDus = 0;
   List<WalletTransaction> _transactions = [];
   bool _isLoading = false;
   bool _isLoadingMore = false;
@@ -16,6 +17,8 @@ class CreditProvider extends ChangeNotifier {
   bool _hasMore = true;
 
   double get solde => _solde;
+  /// Frais de retour impayés : tant que > 0, impossible de créer une course.
+  double get fraisRetourDus => _fraisRetourDus;
   List<WalletTransaction> get transactions => _transactions;
   bool get isLoading => _isLoading;
   bool get isLoadingMore => _isLoadingMore;
@@ -27,7 +30,9 @@ class CreditProvider extends ChangeNotifier {
     _error = null;
     notifyListeners();
     try {
-      _solde = await _api.getCredit();
+      final detail = await _api.getCreditDetail();
+      _solde = detail.solde;
+      _fraisRetourDus = detail.fraisRetourDus;
       _page = 1;
       final result = await _api.getCreditTransactions(page: 1);
       _transactions = result['transactions'] as List<WalletTransaction>;

@@ -9,10 +9,7 @@ class CourseCard extends StatelessWidget {
   final Course course;
   const CourseCard({super.key, required this.course});
 
-  bool get _isActive {
-    final s = course.status.toUpperCase();
-    return s != 'TERMINEE' && s != 'ANNULEE';
-  }
+  bool get _isActive => !course.isFinie;
 
   @override
   Widget build(BuildContext context) {
@@ -64,7 +61,7 @@ class CourseCard extends StatelessWidget {
                 Text(course.statusLabel, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.accentDark)),
               ] else
                 Text(
-                  s == 'TERMINEE' ? 'Livrée' : 'Annulée',
+                  s == 'TERMINEE' ? 'Livrée' : (s == 'RETOURNEE' ? 'Colis rendu' : 'Annulée'),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,

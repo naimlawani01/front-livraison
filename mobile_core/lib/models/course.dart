@@ -61,6 +61,16 @@ class Course {
   /// Montant payé par le client à rembourser (course payée puis annulée).
   final double? remboursementDu;
 
+  // Livraison impossible → retour du colis (statuts RETOUR / RETOURNEE).
+  final DateTime? arriveeClientAt;
+  final String? echecLivraisonRaison; // client_absent | refus_client
+  final DateTime? echecLivraisonAt;
+  final DateTime? retourneeAt;
+  /// Frais de retour versés au livreur (50 % du prix), pris sur le Crédit.
+  final double? fraisRetour;
+  /// Part des frais de retour encore due (Crédit insuffisant au retour).
+  final double fraisRetourRestant;
+
   // Localisation client (lien)
   final String? locationToken;
   final DateTime? locationSharedAt;
@@ -112,6 +122,12 @@ class Course {
     this.montantAEncaisser,
     this.geniuspayCheckoutUrl,
     this.remboursementDu,
+    this.arriveeClientAt,
+    this.echecLivraisonRaison,
+    this.echecLivraisonAt,
+    this.retourneeAt,
+    this.fraisRetour,
+    this.fraisRetourRestant = 0,
     this.locationToken,
     this.locationSharedAt,
     this.trackingToken,
@@ -175,6 +191,12 @@ class Course {
       montantAEncaisser: (json['montant_a_encaisser'] as num?)?.toDouble(),
       geniuspayCheckoutUrl: json['geniuspay_checkout_url'],
       remboursementDu: (json['remboursement_du'] as num?)?.toDouble(),
+      arriveeClientAt: json['arrivee_client_at'] != null ? DateTime.parse(json['arrivee_client_at']) : null,
+      echecLivraisonRaison: json['echec_livraison_raison'],
+      echecLivraisonAt: json['echec_livraison_at'] != null ? DateTime.parse(json['echec_livraison_at']) : null,
+      retourneeAt: json['retournee_at'] != null ? DateTime.parse(json['retournee_at']) : null,
+      fraisRetour: (json['frais_retour'] as num?)?.toDouble(),
+      fraisRetourRestant: (json['frais_retour_restant'] as num?)?.toDouble() ?? 0,
       locationToken: json['location_token'],
       locationSharedAt: json['location_shared_at'] != null
           ? DateTime.parse(json['location_shared_at'])
@@ -197,6 +219,25 @@ class Course {
 
   String get payeurLabel => isPayeurClient ? 'Payée par le client' : 'Payée par l\'expéditeur';
   bool get isLocationShared => locationSharedAt != null;
+
+  /// Le colis repart chez l'expéditeur (livraison impossible).
+  bool get isRetour => status.toUpperCase() == 'RETOUR';
+  bool get isRetournee => status.toUpperCase() == 'RETOURNEE';
+
+  /// Course terminée d'une façon ou d'une autre (plus rien à faire).
+  bool get isFinie {
+    final s = status.toUpperCase();
+    return s == 'TERMINEE' || s == 'ANNULEE' || s == 'RETOURNEE';
+  }
+
+  /// Frais de retour estimés (50 % du prix) tant qu'ils ne sont pas fixés.
+  double get fraisRetourEstimes => fraisRetour ?? (prixPropose * 0.5).roundToDouble();
+
+  String? get echecLivraisonLabel => switch (echecLivraisonRaison) {
+        'client_absent' => 'Client absent',
+        'refus_client' => 'Colis refusé par le client',
+        _ => null,
+      };
 
   String get modePaiementLabel {
     switch (modePaiement.toUpperCase()) {
@@ -224,6 +265,10 @@ class Course {
         return 'Livrée';
       case 'ANNULEE':
         return 'Annulée';
+      case 'RETOUR':
+        return 'Livraison impossible : colis en retour';
+      case 'RETOURNEE':
+        return 'Colis rendu à l\'expéditeur';
       default:
         return status;
     }

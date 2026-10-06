@@ -358,6 +358,32 @@ class ApiService {
     }
   }
 
+  // LIVRAISON IMPOSSIBLE → RETOUR DU COLIS
+
+  /// Livreur : « Je suis chez le client » (démarre l'attente avant « client absent »).
+  Future<Course> signalerArriveeClient(String courseId) async {
+    final response = await _post('$baseUrl/courses/$courseId/arrivee-client');
+    if (response.statusCode == 200) return Course.fromJson(jsonDecode(response.body));
+    _throwHttpError(response, 'Impossible de signaler votre arrivée');
+  }
+
+  /// Livreur : livraison impossible. `raison` = `client_absent` ou `refus_client`.
+  Future<Course> declarerEchecLivraison(String courseId, String raison) async {
+    final response = await _post(
+      '$baseUrl/courses/$courseId/echec-livraison',
+      body: jsonEncode({'raison': raison}),
+    );
+    if (response.statusCode == 200) return Course.fromJson(jsonDecode(response.body));
+    _throwHttpError(response, 'Impossible de déclarer la livraison impossible');
+  }
+
+  /// Expéditeur : il a récupéré son colis (verse les frais de retour au livreur).
+  Future<Course> confirmerRetourRecu(String courseId) async {
+    final response = await _post('$baseUrl/courses/$courseId/retour-recu');
+    if (response.statusCode == 200) return Course.fromJson(jsonDecode(response.body));
+    _throwHttpError(response, 'Impossible de confirmer le retour du colis');
+  }
+
   // LOCATION LINK
 
   Future<Map<String, dynamic>> generateLocationLink(String courseId) async {
@@ -604,6 +630,20 @@ class ApiService {
     final response = await _get('$baseUrl/expediteurs/me/credit');
     if (response.statusCode == 200) {
       return ((json.decode(response.body)['credit_solde']) as num).toDouble();
+    }
+    _throwHttpError(response, 'Impossible de charger le Crédit');
+  }
+
+  /// Solde du Crédit + frais de retour encore dus (bloquent la création de
+  /// course tant qu'ils ne sont pas réglés par une recharge).
+  Future<({double solde, double fraisRetourDus})> getCreditDetail() async {
+    final response = await _get('$baseUrl/expediteurs/me/credit');
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return (
+        solde: (data['credit_solde'] as num).toDouble(),
+        fraisRetourDus: ((data['frais_retour_dus'] ?? 0) as num).toDouble(),
+      );
     }
     _throwHttpError(response, 'Impossible de charger le Crédit');
   }

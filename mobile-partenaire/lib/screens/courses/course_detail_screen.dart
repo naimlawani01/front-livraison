@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:mobile_core/mobile_core.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/course_provider.dart';
+import '../../providers/credit_provider.dart';
 import '../../widgets/livreur_map_widget.dart';
 
 class CourseDetailScreen extends StatefulWidget {
@@ -38,10 +39,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     super.dispose();
   }
 
-  bool get _isActive {
-    final s = _course.status.toUpperCase();
-    return s != 'TERMINEE' && s != 'ANNULEE';
-  }
+  bool get _isActive => !_course.isFinie;
 
   Future<void> _refresh() async {
     final provider = context.read<CourseProvider>();
@@ -60,6 +58,9 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     if (enAttente && !_course.isMobileMoney && _course.isLocationShared) {
       return ('Relancer la course', _relancerCourse);
     }
+    if (_course.isRetour) {
+      return ('J\'ai récupéré le colis', _confirmerRetour);
+    }
     return null;
   }
 
@@ -75,6 +76,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       ('Acceptée par un livreur', _course.accepteeAt),
       ('Colis récupéré', _course.recupereeAt),
       ('Livrée au client', _course.livreeAt),
+      ('Livraison impossible${_course.echecLivraisonLabel != null ? ' · ${_course.echecLivraisonLabel}' : ''}', _course.echecLivraisonAt),
+      ('Colis rendu', _course.retourneeAt),
     ].where((e) => e.$2 != null).toList();
 
     return Scaffold(
@@ -244,6 +247,13 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                                   style: AppTheme.mono(size: 20, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -0.3)),
                             ],
                           ),
+                          if (_course.isRetour || _course.fraisRetour != null) ...[
+                            const SizedBox(height: 12),
+                            _ligneMontant(
+                              _course.fraisRetour != null ? 'Frais de retour au livreur (50 %)' : 'Frais de retour à verser (50 %)',
+                              _course.fraisRetourEstimes,
+                            ),
+                          ],
                           ..._messagesPaiement(),
                         ],
                       ),
@@ -320,7 +330,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                         textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.4),
                       ),
-                    ] else if (_isActive) ...[
+                    ] else if (_isActive && !_course.isRetour) ...[
                       const SizedBox(height: 16),
                       TextButton(
                         onPressed: _showCancelDialog,
@@ -349,6 +359,10 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     final messages = <String>[
       if (enAttente && !_course.isMobileMoney && _course.isLocationShared)
         'Course en attente : si votre Crédit était insuffisant, rechargez-le puis relancez la course.',
+      if (_course.isRetour)
+        'À la réception du colis, ${AppCurrency.format(_course.fraisRetourEstimes)} de frais de retour sont pris sur votre Crédit et versés au livreur.',
+      if (_course.fraisRetourRestant > 0)
+        'Crédit insuffisant : ${AppCurrency.format(_course.fraisRetourRestant)} de frais de retour restent dus. Rechargez votre Crédit pour créer de nouvelles courses.',
       if (_course.remboursementDu != null)
         'Remboursement de ${AppCurrency.format(_course.remboursementDu!)} dû à votre client : il est traité par Sönaiyaa.',
     ];
@@ -464,6 +478,30 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     }
   }
 
+  Future<void> _confirmerRetour() async {
+    final ok = await showConfirmAction(
+      context,
+      icon: Icons.assignment_return_outlined,
+      title: 'Colis récupéré ?',
+      message: 'Confirmez seulement si vous avez le colis en main. '
+          '${AppCurrency.format(_course.fraisRetourEstimes)} de frais de retour seront versés au livreur depuis votre Crédit.',
+      confirmLabel: 'Oui, je l\'ai récupéré',
+    );
+    if (!ok || !mounted) return;
+    try {
+      final c = await ApiService().confirmerRetourRecu(_course.id);
+      if (!mounted) return;
+      setState(() => _course = c);
+      context.read<CreditProvider>().loadCredit();
+      context.read<CourseProvider>().loadCourses();
+      UIUtils.showSuccess(context, c.fraisRetourRestant > 0
+          ? 'Colis récupéré. Rechargez votre Crédit pour régler les frais de retour.'
+          : 'Colis récupéré');
+    } catch (e) {
+      if (mounted) UIUtils.showError(context, e.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
   Future<void> _relancerCourse() async {
     final erreur = await context.read<CourseProvider>().rediffuserCourse(_course.id);
     if (!mounted) return;
@@ -477,7 +515,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
 
   bool get _hasLivreurTrackingStatus {
     final s = _course.status.toUpperCase();
-    return s == 'ACCEPTEE' || s == 'EN_RECUPERATION' || s == 'EN_LIVRAISON';
+    return s == 'ACCEPTEE' || s == 'EN_RECUPERATION' || s == 'EN_LIVRAISON' || s == 'RETOUR';
   }
 
   String get _statusDescription {
@@ -489,6 +527,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       case 'EN_LIVRAISON': return 'Le livreur a le colis et livre votre client';
       case 'TERMINEE': return 'Votre client a reçu son colis.';
       case 'ANNULEE': return 'Cette course a été annulée';
+      case 'RETOUR': return '${_course.echecLivraisonLabel ?? 'Livraison impossible'} : le livreur vous rapporte le colis. Confirmez dès que vous l\'avez récupéré.';
+      case 'RETOURNEE': return 'Le colis vous a été rendu. Contactez votre client pour une nouvelle livraison.';
       default: return '';
     }
   }
@@ -499,6 +539,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
       case 'EN_RECUPERATION': return 'Arrivé, attend le colis';
       case 'EN_LIVRAISON': return 'En livraison vers le client';
       case 'TERMINEE': return 'Livraison terminée';
+      case 'RETOUR': return 'Vous rapporte le colis';
       default: return 'Assigné';
     }
   }

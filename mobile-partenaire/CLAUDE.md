@@ -43,3 +43,5 @@ Flutter application intended for businesses (restaurants, pharmacies, shops) to 
   - **Crédit** : solde en héros, mouvements par jour (types `recharge`, `commission`, `remboursement`, `avoir`, `indemnite`, `ajustement_admin`), feuille de recharge.
   - Compte : Connexion, Inscription (activité en puces, position GPS du commerce), Profil, Modifier le profil (adresse verrouillée si compte vérifié — le backend la refuse, cf. anti-fraude prix), Documents.
 - **Aperçu web** : `flutter run -d chrome --web-port=5173` (les hooks natifs sont déjà gardés par `kIsWeb` dans `main.dart`).
+- **Livraison impossible / retour du colis** : course en `RETOUR` → détail avec « J'ai récupéré le colis » en bouton principal (`POST /courses/{id}/retour-recu`, confirmation qui annonce les frais de retour = 50 % du prix, pris sur le Crédit). Frais de retour impayés (`frais_retour_dus` de `GET /expediteurs/me/credit`, `CreditProvider.fraisRetourDus`) → alerte sur l'Accueil et le Crédit, « Nouvelle course » bloqué jusqu'à la recharge (le backend refuse la création). Course finie = `Course.isFinie` (TERMINEE, ANNULEE, RETOURNEE).
+

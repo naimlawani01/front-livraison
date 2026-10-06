@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -27,6 +28,106 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
   void initState() {
     super.initState();
     _course = widget.course;
+    // Rafraîchit le compte à rebours « client absent » (attente de 10 min).
+    _tic = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted && _course.arriveeClientAt != null && _course.status.toUpperCase() == 'EN_LIVRAISON') {
+        setState(() {});
+      }
+    });
+  }
+
+  Timer? _tic;
+  bool _actionEchec = false;
+
+  @override
+  void dispose() {
+    _tic?.cancel();
+    super.dispose();
+  }
+
+  /// Attente minimale chez le client avant « client absent » (règle backend).
+  static const _attenteClient = Duration(minutes: 10);
+
+  /// Minutes restantes avant de pouvoir déclarer « client absent » (0 = possible).
+  int get _minutesAvantAbsent {
+    final arrivee = _course.arriveeClientAt;
+    if (arrivee == null) return _attenteClient.inMinutes;
+    final reste = _attenteClient - DateTime.now().difference(arrivee.toLocal());
+    return reste.isNegative ? 0 : (reste.inSeconds / 60).ceil();
+  }
+
+  Future<void> _signalerArrivee() async {
+    if (_actionEchec) return;
+    setState(() => _actionEchec = true);
+    try {
+      final c = await ApiService().signalerArriveeClient(_course.id);
+      if (mounted) setState(() => _course = c);
+      HapticFeedback.mediumImpact();
+    } catch (e) {
+      if (mounted) UIUtils.showError(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _actionEchec = false);
+    }
+  }
+
+  Future<void> _livraisonImpossible() async {
+    final minutes = _minutesAvantAbsent;
+    final arrive = _course.arriveeClientAt != null;
+    final raison = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => AppSheet(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const AppSheetHeader(
+              icon: Icons.assignment_return_outlined,
+              title: 'Livraison impossible ?',
+              message: 'Vous rapporterez le colis à l\'expéditeur. Votre part de la course reste acquise et des frais de retour vous sont versés.',
+            ),
+            const SizedBox(height: 16),
+            _ChoixEchec(
+              icon: Icons.person_off_outlined,
+              titre: 'Le client est absent',
+              detail: !arrive
+                  ? 'Appuyez d\'abord sur « Je suis chez le client »'
+                  : (minutes > 0 ? 'Possible dans $minutes min : appelez-le en attendant' : 'Après 10 min d\'attente et des appels'),
+              actif: arrive && minutes == 0,
+              onTap: () => Navigator.pop(ctx, 'client_absent'),
+            ),
+            const SizedBox(height: 8),
+            _ChoixEchec(
+              icon: Icons.block_outlined,
+              titre: 'Le client refuse le colis',
+              detail: 'Il ne veut pas le colis, ou ce n\'est pas ce qu\'il a commandé',
+              actif: true,
+              onTap: () => Navigator.pop(ctx, 'refus_client'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: TextButton.styleFrom(foregroundColor: AppTheme.textSecondary),
+              child: const Text('Retour'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (raison == null || !mounted) return;
+    setState(() => _actionEchec = true);
+    try {
+      final c = await ApiService().declarerEchecLivraison(_course.id, raison);
+      if (!mounted) return;
+      setState(() => _course = c);
+      HapticFeedback.mediumImpact();
+      context.read<CourseProvider>().loadMesCourses();
+      UIUtils.showSuccess(context, 'Rapportez le colis à l\'expéditeur');
+    } catch (e) {
+      if (mounted) UIUtils.showError(context, e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _actionEchec = false);
+    }
   }
 
   // ── Quel step on est (0-based) ──
@@ -36,11 +137,14 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
       case 'EN_RECUPERATION': return 1;
       case 'EN_LIVRAISON': return 2;
       case 'TERMINEE': return 3;
+      case 'RETOUR': return 2;
+      case 'RETOURNEE': return 3;
       default: return 0;
     }
   }
 
-  bool get _isDone => _course.status.toUpperCase() == 'TERMINEE';
+  bool get _isDone => _course.status.toUpperCase() == 'TERMINEE' || _course.isRetournee;
+  bool get _versExpediteur => _step == 0 || _course.isRetour || _course.isRetournee;
 
   // ── Données de chaque étape ──
   List<_StepData> get _steps => [
@@ -233,7 +337,7 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
         // Destination = commerce (étape 0) puis client (étapes 1, 2)
         double? destLat, destLon;
         String? destLabel;
-        if (_step == 0) {
+        if (_versExpediteur) {
           destLat = _course.expediteurLatitude;
           destLon = _course.expediteurLongitude;
           destLabel = _course.expediteurNom ?? 'Commerce';
@@ -307,7 +411,7 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
 
   Future<void> _navigate() async {
     double? lat, lon;
-    if (_step == 0) {
+    if (_versExpediteur) {
       lat = _course.expediteurLatitude;
       lon = _course.expediteurLongitude;
     } else {
@@ -369,7 +473,9 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
   Widget build(BuildContext context) {
     final currentStep = _steps[_step.clamp(0, _steps.length - 1)];
     final chezExpediteur = !_isDone && _step <= 1;
-    final chezClient = !_isDone && _step == 2;
+    final chezClient = !_isDone && _step == 2 && !_course.isRetour;
+    final enRetour = _course.isRetour;
+    final echec = enRetour || _course.isRetournee;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -437,8 +543,8 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
                             ),
                     ),
                     _FriseEtape(
-                      etat: chezClient ? _EtatEtape.active : (_isDone ? _EtatEtape.faite : _EtatEtape.aVenir),
-                      isLast: true,
+                      etat: chezClient ? _EtatEtape.active : (_isDone || echec ? _EtatEtape.faite : _EtatEtape.aVenir),
+                      isLast: !echec,
                       child: chezClient
                           ? _CarteEtape(
                               label: 'Client · livrez maintenant',
@@ -457,6 +563,11 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
                                 SecondaryButton(icon: Icons.navigation_rounded, label: 'Itinéraire', onPressed: _navigate),
                               ],
                             )
+                          : echec
+                          ? _EtapeResume(
+                              titre: 'Livraison impossible · ${_course.contactClientNom}',
+                              detail: [_course.echecLivraisonLabel, _heure(_course.echecLivraisonAt)].whereType<String>().join(' · '),
+                            )
                           : _EtapeResume(
                               titre: _isDone ? 'Livrée · ${_course.contactClientNom}' : 'Client · ${_course.contactClientNom}',
                               detail: _isDone
@@ -467,6 +578,60 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
                                     ].join(' · '),
                             ),
                     ),
+                    if (echec)
+                      _FriseEtape(
+                        etat: enRetour ? _EtatEtape.active : _EtatEtape.faite,
+                        isLast: true,
+                        child: enRetour
+                            ? _CarteEtape(
+                                label: 'Retour · rapportez le colis',
+                                titre: _course.expediteurNom ?? 'Expéditeur',
+                                adresse: _course.expediteurAdresse,
+                                encadre: _Encadre(
+                                  label: 'Frais de retour, versés sur vos Gains quand l\'expéditeur confirme la réception',
+                                  montant: AppCurrency.format(_course.fraisRetourEstimes),
+                                ),
+                                actions: [
+                                  SecondaryButton(icon: Icons.navigation_rounded, label: 'Itinéraire', onPressed: _navigate),
+                                ],
+                              )
+                            : _EtapeResume(
+                                titre: 'Colis rendu · ${_course.expediteurNom ?? 'Expéditeur'}',
+                                detail: [
+                                  _heure(_course.retourneeAt),
+                                  if (_course.fraisRetour != null) 'frais de retour ${AppCurrency.format(_course.fraisRetour!)}',
+                                ].whereType<String>().join(' · '),
+                              ),
+                      ),
+                    if (chezClient) ...[
+                      const SizedBox(height: 16),
+                      if (_course.arriveeClientAt == null)
+                        SecondaryButton(
+                          icon: Icons.where_to_vote_outlined,
+                          label: _actionEchec ? 'Envoi…' : 'Je suis chez le client',
+                          onPressed: _actionEchec ? null : _signalerArrivee,
+                        )
+                      else
+                        Text(
+                          'Arrivé chez le client à ${_heure(_course.arriveeClientAt)}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                        ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _actionEchec ? null : _livraisonImpossible,
+                        style: TextButton.styleFrom(foregroundColor: AppTheme.error, minimumSize: const Size(48, 48)),
+                        child: const Text('Livraison impossible', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                      ),
+                    ],
+                    if (enRetour) ...[
+                      const SizedBox(height: 16),
+                      const Text(
+                        'L\'expéditeur confirmera la réception du colis dans son app.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.4),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     _FinancialSummary(course: _course),
                     if (_course.status.toUpperCase() == 'ACCEPTEE') ...[
@@ -490,7 +655,8 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
             ),
 
             // ── Une seule action principale, en bas ──
-            if (!_isDone)
+            // (pas pendant le retour : c'est l'expéditeur qui confirme)
+            if (!_isDone && !enRetour)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                 child: PrimaryCta(
@@ -969,6 +1135,51 @@ class _PinCodeSheetState extends State<_PinCodeSheet> {
             child: const Text('Retour'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Choix d'une raison de « livraison impossible » (tuile pleine largeur).
+class _ChoixEchec extends StatelessWidget {
+  final IconData icon;
+  final String titre;
+  final String detail;
+  final bool actif;
+  final VoidCallback onTap;
+  const _ChoixEchec({required this.icon, required this.titre, required this.detail, required this.actif, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.cardBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        side: const BorderSide(color: AppTheme.divider, width: 2),
+      ),
+      child: InkWell(
+        onTap: actif ? onTap : null,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Icon(icon, color: actif ? AppTheme.textPrimary : AppTheme.textSecondary),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(titre, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: actif ? AppTheme.textPrimary : AppTheme.textSecondary)),
+                    const SizedBox(height: 2),
+                    Text(detail, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.35)),
+                  ],
+                ),
+              ),
+              if (actif) const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
+            ],
+          ),
+        ),
       ),
     );
   }
