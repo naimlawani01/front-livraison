@@ -1,0 +1,96 @@
+name: livraison_livreur
+description: Application mobile pour les livreurs (taxi-moto)
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  mobile_core:
+    path: ../mobile_core
+  flutter:
+    sdk: flutter
+  
+  # UI
+  cupertino_icons: ^1.0.6
+  
+  # State Management
+  provider: ^6.1.1
+  
+  # Networking
+  http: ^1.1.2
+  dio: ^5.4.0
+  
+  # Storage
+  shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.0.0
+  
+  # Maps & Location
+  google_maps_flutter: ^2.5.0
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
+  flutter_foreground_task: ^8.13.0
+
+  # WebSocket
+  web_socket_channel: ^2.4.0
+  
+  # Utils
+  intl: ^0.18.1
+  logger: ^2.0.2+1
+  url_launcher: ^6.2.2
+  
+  # Splash screen
+  flutter_native_splash: ^2.4.3
+
+  # Firebase
+  firebase_core: ^4.7.0
+  firebase_messaging: ^16.2.0
+  firebase_crashlytics: ^5.2.0
+  
+  # Notifications
+  flutter_local_notifications: ^17.0.0
+  
+  # Image Picker
+  image_picker: ^1.0.4
+
+  # File Picker (PDF)
+  file_picker: ^8.0.0
+
+dev_dependencies:
+  mobile_core:
+    path: ../mobile_core
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/branding/app_icon_1024.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  background_color_ios: "#FFFFFF"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/branding/app_icon_1024.png"
+  web:
+    generate: true
+    image_path: "assets/branding/app_icon_1024.png"
+    background_color: "#FFFFFF"
+    theme_color: "#FF5A1F"
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: "assets/branding/logo_mark_splash.png"
+  android_12:
+    color: "#FFFFFF"
+    image: "assets/branding/logo_mark_splash.png"
+    icon_background_color: "#FFFFFF"
+  web: false
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/branding/
