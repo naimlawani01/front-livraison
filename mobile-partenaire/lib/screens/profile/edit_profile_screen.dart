@@ -62,7 +62,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     final data = <String, dynamic>{
       'nom': _nomCtrl.text.trim(),
-      'adresse': _adresseCtrl.text.trim(),
+      if (!widget.expediteur.isVerified) 'adresse': _adresseCtrl.text.trim(),
       'description': _descriptionCtrl.text.trim().isEmpty
           ? null
           : _descriptionCtrl.text.trim(),
@@ -80,16 +80,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       UIUtils.showSuccess(context, 'Profil mis à jour');
       Navigator.pop(context);
     } else {
-      UIUtils.showError(context, auth.error ?? 'Erreur lors de la mise à jour');
+      UIUtils.showError(context, auth.error ?? 'La mise à jour n\'a pas pu être enregistrée. Réessayez.');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: AppTheme.white,
+        backgroundColor: AppTheme.background,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
@@ -101,7 +101,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               const _SectionHeader(
                 title: 'Informations générales',
@@ -112,13 +112,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 label: 'Nom de l’établissement',
                 icon: Icons.storefront_rounded,
                 validator: (v) => (v == null || v.trim().length < 2)
-                    ? 'Minimum 2 caractères'
+                    ? 'Indiquez le nom de votre commerce'
                     : null,
               ),
               const SizedBox(height: 14),
               AppFormField(
                 controller: _descriptionCtrl,
-                label: 'Description (optionnel)',
+                label: 'Description (facultatif)',
                 icon: Icons.description_outlined,
                 hint: 'Décrivez votre activité…',
                 maxLines: 3,
@@ -135,10 +135,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 label: 'Adresse complète',
                 icon: Icons.location_on_outlined,
                 hint: 'Ex : Quartier Almamya, près du marché',
+                enabled: !widget.expediteur.isVerified,
                 validator: (v) => (v == null || v.trim().length < 5)
-                    ? 'Minimum 5 caractères'
+                    ? 'Précisez l\'adresse (5 caractères au moins)'
                     : null,
               ),
+              if (widget.expediteur.isVerified) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  'Le prix des courses dépend de cette adresse : pour la changer, contactez le support Sönaiyaa.',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.4),
+                ),
+              ],
 
               const SizedBox(height: 32),
 
@@ -148,7 +156,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ),
               AppFormField(
                 controller: _emailCtrl,
-                label: 'Email (optionnel)',
+                label: 'E-mail (facultatif)',
                 icon: Icons.email_outlined,
                 hint: 'contact@exemple.com',
                 keyboardType: TextInputType.emailAddress,
@@ -156,7 +164,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               const SizedBox(height: 14),
               GuineaPhoneField(
                 controller: _telSecondaireCtrl,
-                label: 'Téléphone secondaire (optionnel)',
+                label: 'Téléphone secondaire (facultatif)',
                 validator: (v) {
                   final value = (v ?? '').trim();
                   if (value.isEmpty) return null; // optionnel
@@ -169,21 +177,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               const SizedBox(height: 32),
 
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _isSaving ? null : _save,
-                  child: _isSaving
-                      ? const SizedBox(
-                          width: 22, height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: AppTheme.white,
-                          ),
-                        )
-                      : const Text('Enregistrer'),
-                ),
-              ),
+              PrimaryCta(label: 'Enregistrer', loading: _isSaving, onPressed: _save),
             ],
           ),
         ),
@@ -207,8 +201,8 @@ class _SectionHeader extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
               color: AppTheme.textPrimary,
               letterSpacing: -0.2,
             ),
@@ -219,7 +213,8 @@ class _SectionHeader extends StatelessWidget {
               subtitle!,
               style: const TextStyle(
                 fontSize: 13,
-                color: AppTheme.textTertiary,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
                 height: 1.3,
               ),
             ),
