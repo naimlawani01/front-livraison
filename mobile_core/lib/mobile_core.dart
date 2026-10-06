@@ -30,4 +30,7 @@ export "widgets/onboarding_screen.dart";
 export "widgets/user_avatar.dart";
 export "widgets/brand_dots.dart";
 export "widgets/primary_cta.dart";
+export "widgets/course_frise.dart";
+export "widgets/app_sheet.dart";
+export "widgets/offline_banner.dart";
 export "widgets/animated_splash.dart";

@@ -13,7 +13,6 @@ import 'providers/auth_provider.dart';
 import 'providers/course_provider.dart';
 import 'providers/credit_provider.dart';
 import 'package:mobile_core/mobile_core.dart';
-import 'widgets/offline_banner.dart';
 
 void main() async {
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();

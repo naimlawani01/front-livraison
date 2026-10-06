@@ -16,7 +16,6 @@ import 'providers/course_provider.dart';
 import 'providers/location_provider.dart';
 import 'providers/wallet_provider.dart';
 import 'package:mobile_core/mobile_core.dart';
-import 'widgets/offline_banner.dart';
 import 'screens/auth/profile_setup_screen.dart';
 
 void main() async {

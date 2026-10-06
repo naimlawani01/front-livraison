@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:mobile_core/mobile_core.dart';
+import '../services/network_service.dart';
+import '../theme/app_theme.dart';
 
+/// Bandeau « Pas de connexion » en haut de l'app (réseau faible fréquent).
+/// Encre sur fond clair → lisible au soleil, sans alarmer comme un rouge.
 class OfflineBanner extends StatelessWidget {
   const OfflineBanner({super.key});
 
@@ -18,18 +21,18 @@ class OfflineBanner extends StatelessWidget {
             duration: const Duration(milliseconds: 300),
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: AppTheme.error,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: AppTheme.textPrimary,
               child: const SafeArea(
                 bottom: false,
                 child: Row(
                   children: [
-                    Icon(Icons.wifi_off_rounded, color: Colors.white, size: 18),
-                    SizedBox(width: 10),
+                    Icon(Icons.wifi_off_rounded, color: AppTheme.white, size: 20),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         'Pas de connexion internet',
-                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: AppTheme.white, fontSize: 13, fontWeight: FontWeight.w800),
                       ),
                     ),
                   ],
