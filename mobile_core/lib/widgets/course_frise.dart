@@ -39,7 +39,9 @@ class CourseFrise extends StatelessWidget {
         return 2; // le colis est en route vers le client
       case 'TERMINEE':
         return 3;
-      default:
+      case 'RETOUR':
+        return 1; // le livreur rapporte le colis chez l'expéditeur
+      default: // ANNULEE, RETOURNEE ou inconnu
         return -1; // ANNULEE ou inconnu
     }
   }

@@ -73,6 +73,10 @@ class _CreditScreenState extends State<CreditScreen> with WidgetsBindingObserver
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           children: [
             _CarteCredit(solde: credit.solde),
+            if (credit.fraisRetourDus > 0) ...[
+              const SizedBox(height: 12),
+              _AlerteFraisRetour(montant: credit.fraisRetourDus),
+            ],
             if (credit.transactions.isEmpty)
               const Padding(
                 padding: EdgeInsets.only(top: 8),
@@ -201,6 +205,32 @@ class _CarteCredit extends StatelessWidget {
   }
 }
 
+/// Frais de retour impayés : bloquent la création de course jusqu'à la recharge.
+class _AlerteFraisRetour extends StatelessWidget {
+  final double montant;
+  const _AlerteFraisRetour({required this.montant});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: AppTheme.accentLight, borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('${AppCurrency.format(montant)} de frais de retour à régler',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.accentDark)),
+          const SizedBox(height: 4),
+          const Text(
+            'Un colis vous a été rapporté alors que votre Crédit était trop bas. Rechargez : le livreur est payé en premier, puis vous pourrez créer des courses.',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ── Mouvement de Crédit ──────────────────────────────────────────────────────
 
 class _CreditTile extends StatelessWidget {
@@ -210,13 +240,14 @@ class _CreditTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Sorties : commission d'une course, indemnité versée au livreur.
-    final sortie = txn.type == 'commission' || txn.type == 'indemnite';
+    final sortie = txn.type == 'commission' || txn.type == 'indemnite' || txn.type == 'frais_retour';
     final label = switch (txn.type) {
       'recharge' => txn.description ?? 'Recharge',
       'commission' => txn.description ?? 'Commission d\'une course',
       'remboursement' => txn.description ?? 'Commission rendue',
       'avoir' => txn.description ?? 'Avoir (paiement remboursé)',
       'indemnite' => txn.description ?? 'Indemnité d\'annulation au livreur',
+      'frais_retour' => txn.description ?? 'Frais de retour au livreur',
       'ajustement_admin' => txn.description ?? 'Ajustement',
       _ => txn.description ?? txn.type,
     };

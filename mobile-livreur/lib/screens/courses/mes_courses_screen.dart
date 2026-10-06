@@ -59,7 +59,7 @@ class _MesCoursesScreenState extends State<MesCoursesScreen> with WidgetsBinding
     final courses = context.watch<CourseProvider>();
     bool passee(Course c) {
       final s = c.status.toUpperCase();
-      return s == 'TERMINEE' || s == 'ANNULEE';
+      return s == 'TERMINEE' || s == 'ANNULEE' || s == 'RETOURNEE';
     }
 
     final enCours = courses.mesCourses.where((c) => !passee(c)).toList();
@@ -162,10 +162,13 @@ class _LignePassee extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final livree = course.status.toUpperCase() == 'TERMINEE';
-    final heure = DateFormatter.timeOnly(livree ? (course.livreeAt ?? course.createdAt) : course.createdAt);
+    final rendue = course.isRetournee;
+    final heure = DateFormatter.timeOnly(livree ? (course.livreeAt ?? course.createdAt) : (course.retourneeAt ?? course.createdAt));
     final detail = livree
         ? '$heure · ${course.isMobileMoney ? 'Mobile Money' : 'Espèces'}'
-        : '$heure · Annulée';
+        : rendue
+            ? '$heure · Colis rendu${course.fraisRetour != null ? ' · retour ${AppCurrency.format(course.fraisRetour!)}' : ''}'
+            : '$heure · Annulée';
 
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 64),
@@ -175,13 +178,13 @@ class _LignePassee extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: livree ? AppTheme.successLight : AppTheme.background,
+              color: livree || rendue ? AppTheme.successLight : AppTheme.background,
               shape: BoxShape.circle,
             ),
             child: Icon(
-              livree ? Icons.check_rounded : Icons.close_rounded,
+              livree ? Icons.check_rounded : (rendue ? Icons.assignment_return_outlined : Icons.close_rounded),
               size: 20,
-              color: livree ? AppTheme.successDark : AppTheme.textSecondary,
+              color: livree || rendue ? AppTheme.successDark : AppTheme.textSecondary,
             ),
           ),
           const SizedBox(width: 12),

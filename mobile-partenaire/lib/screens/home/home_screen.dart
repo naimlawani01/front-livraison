@@ -172,13 +172,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     ),
                               const SizedBox(height: 8),
                               Text(
-                                credit.solde < 1200
-                                    ? 'Crédit trop bas pour créer une course : rechargez-le.'
-                                    : 'Couvre la commission Sönaiyaa (12 %) de vos courses.',
+                                credit.fraisRetourDus > 0
+                                    ? '${AppCurrency.format(credit.fraisRetourDus)} de frais de retour à régler : rechargez pour créer des courses.'
+                                    : credit.solde < 1200
+                                        ? 'Crédit trop bas pour créer une course : rechargez-le.'
+                                        : 'Couvre la commission Sönaiyaa (12 %) de vos courses.',
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
-                                  color: credit.solde < 1200 ? AppTheme.accentDark : AppTheme.textSecondary,
+                                  color: credit.solde < 1200 || credit.fraisRetourDus > 0 ? AppTheme.accentDark : AppTheme.textSecondary,
                                   height: 1.4,
                                 ),
                               ),
@@ -225,10 +227,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               child: PrimaryCta(
-                label: verifie ? 'Nouvelle course' : 'Compte en cours de vérification',
-                onPressed: verifie
-                    ? () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateCourseScreen()))
-                    : null,
+                label: !verifie
+                    ? 'Compte en cours de vérification'
+                    : (credit.fraisRetourDus > 0 ? 'Rechargez pour créer une course' : 'Nouvelle course'),
+                onPressed: !verifie
+                    ? null
+                    : credit.fraisRetourDus > 0
+                        ? () => widget.onNavigateToTab?.call(2)
+                        : () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CreateCourseScreen())),
               ),
             ),
           ],

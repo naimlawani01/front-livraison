@@ -14,6 +14,8 @@ class CourseEnCoursCard extends StatelessWidget {
         return 'Allez chercher le colis · ${course.expediteurNom ?? 'Expéditeur'}';
       case 'EN_RECUPERATION':
         return 'Récupérez le colis chez ${course.expediteurNom ?? 'l\'expéditeur'}';
+      case 'RETOUR':
+        return 'Livraison impossible : rapportez le colis à ${course.expediteurNom ?? 'l\'expéditeur'}';
       default:
         return 'Livrez ${course.contactClientNom}';
     }

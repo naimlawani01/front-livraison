@@ -37,17 +37,11 @@ class CourseProvider extends ChangeNotifier {
   }
 
   List<Course> get coursesEnCours {
-    return _courses.where((c) {
-      final s = c.status.toUpperCase();
-      return s != 'TERMINEE' && s != 'ANNULEE';
-    }).toList();
+    return _courses.where((c) => !c.isFinie).toList();
   }
 
   List<Course> get coursesTerminees {
-    return _courses.where((c) {
-      final s = c.status.toUpperCase();
-      return s == 'TERMINEE' || s == 'ANNULEE';
-    }).toList();
+    return _courses.where((c) => c.isFinie).toList();
   }
 
   Future<void> loadCourses({String? statusFilter}) async {
