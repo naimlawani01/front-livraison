@@ -63,36 +63,20 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     if (requiresSubtype) {
       vehiculeDocType = await showModalBottomSheet<String>(
         context: context,
-        backgroundColor: AppTheme.white,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusLg)),
-        ),
-        builder: (ctx) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _sheetHandle(),
-                const SizedBox(height: 20),
-                Text('Type de document véhicule', style: Theme.of(ctx).textTheme.titleMedium),
-                const SizedBox(height: 8),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    'Choisissez le document que vous souhaitez envoyer',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _sheetTile(ctx, icon: Icons.drive_eta_outlined, color: AppTheme.accent, bgColor: AppTheme.accentLight,
-                    title: 'Carte grise', subtitle: 'Carte grise du véhicule', value: 'carte_grise'),
-                _sheetTile(ctx, icon: Icons.badge_outlined, color: AppTheme.info, bgColor: AppTheme.infoLight,
-                    title: 'Permis de conduire', subtitle: 'Votre permis de conduire', value: 'permis_conduire'),
-                const SizedBox(height: 8),
-              ],
-            ),
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => AppSheet(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const AppSheetHeader(
+                icon: Icons.drive_eta_outlined,
+                title: 'Quel document véhicule ?',
+                message: 'Un seul des deux suffit.',
+              ),
+              const SizedBox(height: 16),
+              _sheetTile(ctx, icon: Icons.drive_eta_outlined, title: 'Carte grise', subtitle: 'Carte grise du véhicule', value: 'carte_grise'),
+              _sheetTile(ctx, icon: Icons.badge_outlined, title: 'Permis de conduire', subtitle: 'Votre permis de conduire', value: 'permis_conduire'),
+            ],
           ),
         ),
       );
@@ -101,30 +85,22 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
     final source = await showModalBottomSheet<_PickSource>(
       context: context,
-      backgroundColor: AppTheme.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusLg)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _sheetHandle(),
-              const SizedBox(height: 20),
-              Text('Choisir une source', style: Theme.of(ctx).textTheme.titleMedium),
-              const SizedBox(height: 16),
-              _sheetTile(ctx, icon: Icons.camera_alt_rounded, color: AppTheme.accent, bgColor: AppTheme.accentLight,
-                  title: 'Appareil photo', subtitle: 'Prendre une photo', value: _PickSource.camera),
-              _sheetTile(ctx, icon: Icons.photo_library_rounded, color: AppTheme.info, bgColor: AppTheme.infoLight,
-                  title: 'Galerie', subtitle: 'Choisir une image existante', value: _PickSource.gallery),
-              if (allowPdf)
-                _sheetTile(ctx, icon: Icons.picture_as_pdf_rounded, color: const Color(0xFFE53935), bgColor: const Color(0xFFFFEBEE),
-                    title: 'Document PDF', subtitle: 'Importer un fichier PDF', value: _PickSource.pdf),
-              const SizedBox(height: 8),
-            ],
-          ),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => AppSheet(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const AppSheetHeader(
+              icon: Icons.upload_file_rounded,
+              title: 'Envoyer le document',
+              message: 'Une photo nette, bien éclairée, où tout le texte est lisible.',
+            ),
+            const SizedBox(height: 16),
+            _sheetTile(ctx, icon: Icons.camera_alt_rounded, title: 'Prendre une photo', subtitle: 'Avec l\'appareil photo', value: _PickSource.camera),
+            _sheetTile(ctx, icon: Icons.photo_library_rounded, title: 'Choisir dans la galerie', subtitle: 'Une photo déjà prise', value: _PickSource.gallery),
+            if (allowPdf)
+              _sheetTile(ctx, icon: Icons.picture_as_pdf_rounded, title: 'Fichier PDF', subtitle: 'Un document scanné', value: _PickSource.pdf),
+          ],
         ),
       ),
     );
@@ -160,9 +136,9 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     try {
       await _apiService.uploadDocument(documentType, filePath, vehiculeDocType: vehiculeDocType);
       if (mounted) await context.read<AuthProvider>().refreshProfile();
-      if (mounted) UIUtils.showSuccess(context, 'Document uploadé avec succès');
+      if (mounted) UIUtils.showSuccess(context, 'Document envoyé');
     } catch (e) {
-      if (mounted) UIUtils.showError(context, 'Erreur : ${e.toString()}');
+      if (mounted) UIUtils.showError(context, 'L\'envoi a échoué. Vérifiez votre connexion puis réessayez.');
     } finally {
       if (mounted) setState(() { _isUploading = false; _uploadingType = null; });
     }
@@ -175,14 +151,14 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
     final uploadedCount = documents.where((d) => d.url != null).length;
 
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: const Text('Mes documents'),
-        backgroundColor: AppTheme.white,
+        backgroundColor: AppTheme.background,
         surfaceTintColor: Colors.transparent,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -191,54 +167,41 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                gradient: AppTheme.darkGradient,
+                color: AppTheme.cardBg,
                 borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                boxShadow: AppTheme.shadowMd,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 40, height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                        ),
-                        child: const Icon(Icons.folder_outlined, color: AppTheme.white, size: 20),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Vos documents', style: TextStyle(color: AppTheme.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 2),
-                            Text('Images ou PDF acceptés', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
-                          ],
-                        ),
-                      ),
-                    ],
+                  Text(
+                    uploadedCount == 3 ? 'Dossier complet' : '$uploadedCount sur 3 documents envoyés',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    uploadedCount == 3
+                        ? 'Notre équipe vérifie vos documents, vous serez prévenu dès la validation.'
+                        : 'Envoyez les 3 documents pour que votre compte soit vérifié.',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.4),
                   ),
                   const SizedBox(height: 16),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: uploadedCount / 3,
-                      backgroundColor: Colors.white.withOpacity(0.15),
-                      valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.accent),
-                      minHeight: 6,
+                      backgroundColor: AppTheme.divider,
+                      valueColor: AlwaysStoppedAnimation<Color>(uploadedCount == 3 ? AppTheme.success : AppTheme.accent),
+                      minHeight: 8,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text('$uploadedCount / 3 documents envoyés', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 12, fontWeight: FontWeight.w500)),
                 ],
               ),
             ),
             const SizedBox(height: 24),
-            Text('Documents requis', style: Theme.of(context).textTheme.titleMedium),
+            const Text('Documents requis', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
             const SizedBox(height: 4),
-            const Text('Appuyez sur un document pour l\'envoyer', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+            const Text('Appuyez sur un document pour l\'envoyer ou le remplacer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
             const SizedBox(height: 16),
             ...documents.map((doc) => _buildDocumentCard(doc)),
             const SizedBox(height: 40),
@@ -256,24 +219,25 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: GestureDetector(
-        onTap: isCurrentlyUploading ? null : () => _pickAndUpload(doc.type, requiresSubtype: doc.requiresSubtype, allowPdf: doc.allowPdf),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
+      child: Material(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        child: InkWell(
+        onTap: _isUploading ? null : () => _pickAndUpload(doc.type, requiresSubtype: doc.requiresSubtype, allowPdf: doc.allowPdf),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: isUploaded ? AppTheme.successLight : AppTheme.background,
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            border: Border.all(color: isUploaded ? AppTheme.success.withOpacity(0.3) : AppTheme.divider),
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+            border: Border.all(color: isUploaded ? AppTheme.success : AppTheme.divider, width: 2),
           ),
           child: Row(
             children: [
               Container(
                 width: 56, height: 56,
                 decoration: BoxDecoration(
-                  color: isUploaded ? AppTheme.success.withOpacity(0.1) : AppTheme.white,
+                  color: isUploaded ? AppTheme.successLight : AppTheme.background,
                   borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                  border: Border.all(color: isUploaded ? AppTheme.success.withOpacity(0.2) : AppTheme.divider),
                   image: fullImageUrl != null
                       ? DecorationImage(image: NetworkImage(fullImageUrl), fit: BoxFit.cover, onError: (_, __) {})
                       : null,
@@ -282,7 +246,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                     ? Icon(
                         isPdf ? Icons.picture_as_pdf_rounded : doc.icon,
                         size: 24,
-                        color: isPdf ? const Color(0xFFE53935) : (isUploaded ? AppTheme.success : AppTheme.textTertiary),
+                        color: isPdf ? AppTheme.error : (isUploaded ? AppTheme.successDark : AppTheme.textSecondary),
                       )
                     : null,
               ),
@@ -291,67 +255,45 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(doc.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+                    Text(doc.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
                     const SizedBox(height: 2),
-                    Text(doc.subtitle, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+                    Text(doc.subtitle, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
                     const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: isUploaded ? AppTheme.success.withOpacity(0.12) : AppTheme.accent.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(isUploaded ? Icons.check_circle_rounded : Icons.upload_rounded, size: 12, color: isUploaded ? AppTheme.success : AppTheme.accent),
-                          const SizedBox(width: 4),
-                          Text(
-                            isUploaded ? (isPdf ? 'PDF envoyé ✓' : 'Envoyé ✓') : 'À envoyer',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isUploaded ? AppTheme.success : AppTheme.accent),
-                          ),
-                        ],
-                      ),
+                    Text(
+                      isUploaded ? (isPdf ? 'PDF envoyé' : 'Envoyé') : 'À envoyer',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: isUploaded ? AppTheme.successDark : AppTheme.accentDark),
                     ),
                   ],
                 ),
               ),
               if (isCurrentlyUploading)
-                const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accent)))
+                const BrandDotsPulse(color: AppTheme.accent)
               else
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: isUploaded ? AppTheme.success.withOpacity(0.1) : AppTheme.accent.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                  ),
-                  child: Icon(
-                    isUploaded ? Icons.refresh_rounded : (doc.allowPdf ? Icons.upload_file_rounded : Icons.add_a_photo_outlined),
-                    size: 18,
-                    color: isUploaded ? AppTheme.success : AppTheme.accent,
-                  ),
+                Icon(
+                  isUploaded ? Icons.refresh_rounded : Icons.upload_rounded,
+                  color: isUploaded ? AppTheme.textSecondary : AppTheme.accentDark,
                 ),
             ],
           ),
+        ),
         ),
       ),
     );
   }
 
-  Widget _sheetHandle() => Container(
-    width: 40, height: 4,
-    decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(2)),
-  );
-
-  Widget _sheetTile<T>(BuildContext ctx, {required IconData icon, required Color color, required Color bgColor, required String title, required String subtitle, required T value}) {
+  Widget _sheetTile<T>(BuildContext ctx, {required IconData icon, required String title, required String subtitle, required T value}) {
     return ListTile(
+      minVerticalPadding: 12,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4),
       leading: Container(
-        width: 44, height: 44,
-        decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(AppTheme.radiusSm)),
-        child: Icon(icon, color: color),
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(color: AppTheme.accentLight, borderRadius: BorderRadius.circular(AppTheme.radiusSm)),
+        child: Icon(icon, color: AppTheme.accentDark),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
+      title: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+      trailing: const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
       onTap: () => Navigator.pop(ctx, value),
     );
   }

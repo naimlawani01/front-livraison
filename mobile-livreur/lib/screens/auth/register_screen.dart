@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/auth_provider.dart';
 import 'package:mobile_core/mobile_core.dart';
+import '../../widgets/vehicule_choix.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -36,8 +37,6 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
-
-  final List<String> _vehiculeOptions = ['moto', 'scooter', 'vélo'];
 
   @override
   void initState() {
@@ -97,7 +96,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     if (!_formKeyStep2.currentState!.validate()) return;
 
     if (!_consentAccepted) {
-      UIUtils.showError(context, "Veuillez accepter les conditions d'utilisation");
+      UIUtils.showError(context, "Cochez la case pour accepter les conditions d'utilisation");
       return;
     }
 
@@ -143,43 +142,22 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnim,
           child: SingleChildScrollView(
-            padding: EdgeInsets.fromLTRB(24, 20, 24, bottom + 24),
+            padding: EdgeInsets.fromLTRB(16, 24, 16, bottom + 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 40),
-
-                // Logo
-                Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: AppTheme.black,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Icon(
-                    Icons.delivery_dining_rounded,
-                    color: AppTheme.white,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // Title
-                Text('Créer un compte',
-                    style: Theme.of(context).textTheme.displayMedium),
+                Image.asset('assets/branding/logo_mark_tight.png', width: 56, height: 56, fit: BoxFit.contain),
+                const SizedBox(height: 24),
+                const Text('Devenir livreur', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.8)),
                 const SizedBox(height: 8),
-                Text(
-                  'Devenez livreur sur notre plateforme',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyLarge
-                      ?.copyWith(color: AppTheme.textSecondary),
+                const Text(
+                  'Recevez des courses près de chez vous et soyez payé à chaque livraison.',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.4),
                 ),
                 const SizedBox(height: 24),
 
@@ -198,34 +176,12 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                 const SizedBox(height: 32),
 
                 // Action button
-                Consumer<AuthProvider>(
-                  builder: (context, auth, _) {
-                    return SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: auth.isLoading
-                            ? null
-                            : (_currentStep == 0
-                                ? _handleNext
-                                : _handleCreateProfile),
-                        child: auth.isLoading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: AppTheme.white,
-                                ),
-                              )
-                            : Text(_currentStep == 0
-                                ? 'Suivant'
-                                : 'Créer mon profil'),
-                      ),
-                    );
-                  },
+                PrimaryCta(
+                  label: _currentStep == 0 ? 'Continuer' : 'Créer mon profil',
+                  loading: context.watch<AuthProvider>().isLoading,
+                  onPressed: _currentStep == 0 ? _handleNext : _handleCreateProfile,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
                 // Login link
                 Center(
@@ -242,8 +198,8 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                           TextSpan(
                             text: 'Se connecter',
                             style: TextStyle(
-                              color: AppTheme.accent,
-                              fontWeight: FontWeight.w600,
+                              color: AppTheme.accentDark,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
                         ],
@@ -265,45 +221,48 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         _buildStepDot(0, 'Compte'),
         Expanded(
           child: Container(
-            height: 2,
+            height: 3,
             margin: const EdgeInsets.symmetric(horizontal: 8),
-            color: _currentStep >= 1 ? AppTheme.black : AppTheme.divider,
+            decoration: BoxDecoration(
+              color: _currentStep >= 1 ? AppTheme.success : AppTheme.divider,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
         ),
-        _buildStepDot(1, 'Infos livreur'),
+        _buildStepDot(1, 'Vous et votre véhicule'),
       ],
     );
   }
 
   Widget _buildStepDot(int step, String label) {
-    final isActive = _currentStep >= step;
+    final fait = _currentStep > step;
+    final actif = _currentStep == step;
     return Column(
       children: [
         Container(
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: isActive ? AppTheme.black : AppTheme.background,
+            color: fait ? AppTheme.success : (actif ? AppTheme.accent : AppTheme.cardBg),
             shape: BoxShape.circle,
+            border: fait || actif ? null : Border.all(color: AppTheme.divider, width: 2),
           ),
           child: Center(
-            child: Text(
-              '${step + 1}',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: isActive ? AppTheme.white : AppTheme.textTertiary,
-              ),
-            ),
+            child: fait
+                ? const Icon(Icons.check_rounded, size: 18, color: AppTheme.white)
+                : Text(
+                    '${step + 1}',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: actif ? AppTheme.white : AppTheme.textSecondary),
+                  ),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
-            fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-            color: isActive ? AppTheme.textPrimary : AppTheme.textTertiary,
+            fontSize: 13,
+            fontWeight: actif ? FontWeight.w800 : FontWeight.w600,
+            color: actif ? AppTheme.textPrimary : AppTheme.textSecondary,
           ),
         ),
       ],
@@ -337,7 +296,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           AppFormField(
             controller: _passwordController,
             label: '',
-            hint: 'Minimum 6 caractères',
+            hint: 'Au moins 8 caractères',
             icon: Icons.lock_outline_rounded,
             obscureText: _obscurePassword,
             serverError: _passwordServerError,
@@ -352,15 +311,14 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
                 size: 20,
-                color: AppTheme.textTertiary,
               ),
               onPressed: () =>
                   setState(() => _obscurePassword = !_obscurePassword),
             ),
             validator: (v) {
               if (v == null || v.isEmpty) return 'Le mot de passe est requis';
-              if (v.length < 8) return 'Minimum 8 caractères';
-              if (RegExp(r'^(.)\1+$').hasMatch(v)) return 'Mot de passe trop simple';
+              if (v.length < 8) return 'Au moins 8 caractères';
+              if (RegExp(r'^(.)\1+$').hasMatch(v)) return 'Mot de passe trop simple : variez les caractères';
               return null;
             },
           ),
@@ -382,7 +340,6 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                     ? Icons.visibility_off_outlined
                     : Icons.visibility_outlined,
                 size: 20,
-                color: AppTheme.textTertiary,
               ),
               onPressed: () =>
                   setState(() => _obscureConfirm = !_obscureConfirm),
@@ -413,7 +370,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           TextFormField(
             controller: _nomCompletController,
             textCapitalization: TextCapitalization.words,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             decoration: const InputDecoration(
               hintText: 'Votre nom et prénom',
               prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
@@ -429,44 +386,18 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           Text('Type de véhicule',
               style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: _selectedVehicule,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.two_wheeler_rounded, size: 20),
-            ),
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: AppTheme.textPrimary,
-            ),
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-            items: _vehiculeOptions.map((type) {
-              return DropdownMenuItem(
-                value: type,
-                child: Text(type[0].toUpperCase() + type.substring(1)),
-              );
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _selectedVehicule = value);
-              }
-            },
-          ),
+          VehiculeChoix(value: _selectedVehicule, onChanged: (v) => setState(() => _selectedVehicule = v)),
           const SizedBox(height: 20),
 
           // Marque/Modèle (optional)
           Text('Marque / Modèle',
               style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 4),
-          Text('Optionnel',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AppTheme.textTertiary)),
+          const Text('Facultatif', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
           const SizedBox(height: 8),
           TextFormField(
             controller: _marqueModeleController,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             decoration: const InputDecoration(
               hintText: 'Ex: Honda PCX 125',
               prefixIcon:
@@ -478,16 +409,12 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           // Email (optional)
           Text('Adresse e-mail', style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 4),
-          Text('Optionnel',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: AppTheme.textTertiary)),
+          const Text('Facultatif', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
           const SizedBox(height: 8),
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             decoration: const InputDecoration(
               hintText: 'votre@email.com',
               prefixIcon: Icon(Icons.email_outlined, size: 20),
@@ -504,38 +431,36 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           const SizedBox(height: 24),
 
           // Consentement
-          GestureDetector(
+          InkWell(
             onTap: () => setState(() => _consentAccepted = !_consentAccepted),
+            borderRadius: BorderRadius.circular(AppTheme.radiusSm),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: Checkbox(
-                    value: _consentAccepted,
-                    onChanged: (v) => setState(() => _consentAccepted = v ?? false),
-                    activeColor: AppTheme.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-                  ),
+                Checkbox(
+                  value: _consentAccepted,
+                  onChanged: (v) => setState(() => _consentAccepted = v ?? false),
+                  activeColor: AppTheme.accent,
+                  side: const BorderSide(color: AppTheme.textSecondary, width: 2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Text.rich(
                     TextSpan(
-                      style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary, height: 1.5),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.5),
                       children: [
                         const TextSpan(text: "J'ai lu et j'accepte les "),
                         TextSpan(
                           text: "Conditions d'utilisation",
-                          style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+                          style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w800, decoration: TextDecoration.underline),
                           recognizer: TapGestureRecognizer()
                             ..onTap = () => launchUrl(Uri.parse('https://www.sonaiyaa.com/conditions-utilisation.html'), mode: LaunchMode.externalApplication),
                         ),
                         const TextSpan(text: " et la "),
                         TextSpan(
                           text: "Politique de confidentialité",
-                          style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+                          style: const TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w800, decoration: TextDecoration.underline),
                           recognizer: TapGestureRecognizer()
                             ..onTap = () => launchUrl(Uri.parse('https://www.sonaiyaa.com/politique-confidentialite.html'), mode: LaunchMode.externalApplication),
                         ),

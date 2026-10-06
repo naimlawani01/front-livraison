@@ -22,6 +22,18 @@ class DateFormatter {
   static String dateOnly(DateTime utc) =>
       DateFormat.yMMMd(_locale).format(utc.toLocal());
 
+  /// Titre de section par jour : "Aujourd'hui", "Hier" ou "14 mai 2026".
+  static String jour(DateTime utc) {
+    final local = utc.toLocal();
+    final now = DateTime.now();
+    final diff = DateTime(now.year, now.month, now.day)
+        .difference(DateTime(local.year, local.month, local.day))
+        .inDays;
+    if (diff == 0) return 'Aujourd\'hui';
+    if (diff == 1) return 'Hier';
+    return dateOnly(utc);
+  }
+
   /// "10:30"
   static String timeOnly(DateTime utc) =>
       DateFormat.Hm(_locale).format(utc.toLocal());

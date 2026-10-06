@@ -103,7 +103,7 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: loc.isTracking ? AppTheme.successLight : AppTheme.background,
+                      color: loc.isTracking ? AppTheme.successLight : AppTheme.divider,
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
@@ -112,12 +112,12 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
                         Icon(
                           loc.isTracking ? Icons.gps_fixed_rounded : Icons.gps_off_rounded,
                           size: 14,
-                          color: loc.isTracking ? AppTheme.success : AppTheme.textTertiary,
+                          color: loc.isTracking ? AppTheme.success : AppTheme.textSecondary,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           loc.isTracking ? 'GPS' : 'GPS off',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: loc.isTracking ? AppTheme.success : AppTheme.textTertiary),
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: loc.isTracking ? AppTheme.success : AppTheme.textSecondary),
                         ),
                       ],
                     ),
@@ -159,7 +159,7 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
                           _isFull(courses)
                               ? '${_activeCount(courses)}/2 courses en cours — Terminez-en une pour en accepter une nouvelle.'
                               : '${_activeCount(courses)}/2 course en cours — Vous pouvez encore en accepter une.',
-                          style: const TextStyle(fontSize: 12, color: AppTheme.textPrimary, height: 1.3),
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary, height: 1.35),
                         ),
                       ),
                     ],
@@ -171,14 +171,9 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
               child: RefreshIndicator(
                 onRefresh: _load,
                 color: AppTheme.accent,
-                child: courses.isLoading && list.isEmpty
-                    ? const Center(child: CircularProgressIndicator(color: AppTheme.accent))
-                    : list.isEmpty
-                        ? ListView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            children: [_EmptyState(gpsOn: loc.isTracking)],
-                          )
-                        : ListView.separated(
+                child: list.isEmpty
+                    ? _pleinEcran(_etatListeVide(courses, loc))
+                    : ListView.separated(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                             itemCount: list.length,
                             separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -206,67 +201,57 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
     );
   }
 
+  // L'état vide doit rester « tirable » pour rafraîchir (RefreshIndicator).
+  Widget _pleinEcran(Widget child) => LayoutBuilder(
+        builder: (_, c) => ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [SizedBox(height: c.maxHeight, child: child)],
+        ),
+      );
+
+  // Les 4 états de la liste : chargement, hors ligne, erreur, vide.
+  Widget _etatListeVide(CourseProvider courses, LocationProvider loc) {
+    if (courses.isLoading) {
+      return const LoadingState(message: 'Recherche des courses autour de vous');
+    }
+    if (!NetworkService().isOnline) return OfflineState(onRetry: _load);
+    if (courses.error != null) return ErrorState(message: courses.error, onRetry: _load);
+    if (!loc.isTracking) {
+      return EmptyState(
+        icon: Icons.gps_off_rounded,
+        title: 'Activez votre position',
+        message: 'Votre position sert à vous proposer les courses les plus proches.',
+        actionLabel: 'Activer le GPS',
+        actionIcon: Icons.gps_fixed_rounded,
+        onAction: () => loc.startTracking(),
+      );
+    }
+    return const EmptyState(
+      icon: Icons.delivery_dining_rounded,
+      title: 'Aucune course pour le moment',
+      message: 'Restez en ligne : les nouvelles courses apparaissent ici automatiquement.',
+    );
+  }
+
   Widget _buildBlockedScreen(BuildContext context, {required bool verified}) {
-    final isOffline = verified;
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(40),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: isOffline ? AppTheme.background : AppTheme.warningLight,
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Icon(
-                    isOffline ? Icons.wifi_off_rounded : Icons.lock_outline_rounded,
-                    size: 36,
-                    color: isOffline ? AppTheme.textTertiary : AppTheme.warning,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Text(
-                  isOffline ? 'Vous êtes hors ligne' : 'Compte non vérifié',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  isOffline
-                      ? 'Activez votre statut « En ligne » depuis l\'écran principal pour voir les courses disponibles.'
-                      : 'Un administrateur doit vérifier votre compte avant que vous puissiez voir et accepter des courses.',
-                  style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.5),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: AppTheme.background,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.lightbulb_outline_rounded, size: 18, color: AppTheme.textTertiary),
-                      SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'En attendant, complétez votre profil et vos documents pour accélérer la vérification.',
-                          style: TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.4),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        child: verified
+            ? const EmptyState(
+                icon: Icons.power_settings_new_rounded,
+                title: 'Vous êtes hors ligne',
+                message: 'Passez « En ligne » depuis l\'accueil pour recevoir des courses.',
+                tint: AppTheme.textPrimary,
+                tintBackground: AppTheme.divider,
+              )
+            : const EmptyState(
+                icon: Icons.lock_outline_rounded,
+                title: 'Compte en cours de vérification',
+                message: 'Notre équipe vérifie vos documents. En attendant, complétez votre profil pour accélérer la validation.',
+                tint: AppTheme.warning,
+                tintBackground: AppTheme.warningLight,
+              ),
       ),
     );
   }
@@ -523,71 +508,6 @@ class _CourseRow extends StatelessWidget {
               const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────
-// EMPTY STATE
-// ──────────────────────────────────────────────────────
-class _EmptyState extends StatelessWidget {
-  final bool gpsOn;
-  const _EmptyState({required this.gpsOn});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 100, height: 100,
-              decoration: BoxDecoration(
-                color: AppTheme.background,
-                borderRadius: BorderRadius.circular(32),
-              ),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                   Icon(Icons.delivery_dining_rounded, size: 48, color: AppTheme.textTertiary.withValues(alpha: 0.5)),
-                   if (gpsOn)
-                     const Positioned(
-                       bottom: 20, right: 20,
-                       child: Icon(Icons.search_rounded, size: 24, color: AppTheme.accent),
-                     ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              gpsOn ? 'Recherche de courses…' : 'GPS désactivé',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              gpsOn 
-                ? 'Nous cherchons les meilleures opportunités autour de vous. Restez à l\'écoute !' 
-                : 'Activez votre position pour voir les livraisons disponibles à proximité.',
-              style: const TextStyle(fontSize: 15, color: AppTheme.textSecondary, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            if (!gpsOn) ...[
-              const SizedBox(height: 32),
-              ElevatedButton.icon(
-                onPressed: () => context.read<LocationProvider>().startTracking(),
-                icon: const Icon(Icons.gps_fixed_rounded, size: 18),
-                label: const Text('Activer le GPS'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.accent,
-                  minimumSize: const Size(200, 48),
-                ),
-              ),
-            ],
-          ],
         ),
       ),
     );

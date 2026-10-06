@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import 'package:mobile_core/mobile_core.dart';
+import '../../widgets/vehicule_choix.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -71,7 +72,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       UIUtils.showSuccess(context, 'Profil mis à jour');
       Navigator.pop(context);
     } else {
-      UIUtils.showError(context, auth.error ?? 'Erreur lors de la mise à jour');
+      UIUtils.showError(context, auth.error ?? 'La mise à jour n\'a pas pu être enregistrée. Réessayez.');
     }
   }
 
@@ -80,9 +81,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final isLoading = context.watch<AuthProvider>().isLoading;
 
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: AppTheme.white,
+        backgroundColor: AppTheme.background,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
@@ -94,11 +95,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
               const _SectionHeader(
                 title: 'Identité',
-                subtitle: 'Comment vous apparaissez aux expediteurs',
+                subtitle: 'Comment vous apparaissez aux expéditeurs',
               ),
               AppFormField(
                 controller: _nomController,
@@ -106,7 +107,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 icon: Icons.person_outline_rounded,
                 hint: 'Prénom Nom',
                 validator: (v) => (v == null || v.trim().length < 2)
-                    ? 'Minimum 2 caractères'
+                    ? 'Indiquez votre nom complet'
                     : null,
               ),
 
@@ -114,56 +115,29 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               const _SectionHeader(
                 title: 'Véhicule',
-                subtitle: 'Pour mieux vous matcher avec les courses',
+                subtitle: 'Pour vous proposer les courses adaptées',
               ),
               const _FieldLabel('Type de véhicule'),
               const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _typeVehicule,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.two_wheeler_rounded, size: 20),
-                  hintText: 'Choisir',
-                ),
-                items: _vehiculeOptions
-                    .map((v) => DropdownMenuItem(
-                          value: v,
-                          child: Text(v[0].toUpperCase() + v.substring(1)),
-                        ))
-                    .toList(),
-                onChanged: (v) => setState(() => _typeVehicule = v),
-              ),
+              VehiculeChoix(value: _typeVehicule ?? '', onChanged: (v) => setState(() => _typeVehicule = v)),
               const SizedBox(height: 14),
               AppFormField(
                 controller: _marqueController,
-                label: 'Marque / Modèle (optionnel)',
+                label: 'Marque et modèle (facultatif)',
                 icon: Icons.directions_car_outlined,
                 hint: 'Ex : Honda CB 125',
               ),
               const SizedBox(height: 14),
               AppFormField(
                 controller: _plaqueController,
-                label: "Plaque d'immatriculation (optionnel)",
+                label: "Plaque d'immatriculation (facultatif)",
                 icon: Icons.pin_outlined,
                 hint: 'Ex : RC 1234 A',
               ),
 
               const SizedBox(height: 32),
 
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : _handleSave,
-                  child: isLoading
-                      ? const SizedBox(
-                          width: 22, height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: AppTheme.white,
-                          ),
-                        )
-                      : const Text('Enregistrer'),
-                ),
-              ),
+              PrimaryCta(label: 'Enregistrer', loading: isLoading, onPressed: _handleSave),
             ],
           ),
         ),
@@ -187,8 +161,8 @@ class _SectionHeader extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
               color: AppTheme.textPrimary,
               letterSpacing: -0.2,
             ),
@@ -199,7 +173,8 @@ class _SectionHeader extends StatelessWidget {
               subtitle!,
               style: const TextStyle(
                 fontSize: 13,
-                color: AppTheme.textTertiary,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textSecondary,
                 height: 1.3,
               ),
             ),

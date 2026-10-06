@@ -16,7 +16,6 @@ import 'providers/course_provider.dart';
 import 'providers/location_provider.dart';
 import 'providers/wallet_provider.dart';
 import 'package:mobile_core/mobile_core.dart';
-import 'widgets/offline_banner.dart';
 import 'screens/auth/profile_setup_screen.dart';
 
 void main() async {
@@ -179,7 +178,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
       );
     }
     if (_onboardingSeen == null) {
-      return const Scaffold(backgroundColor: AppTheme.white);
+      return const Scaffold(backgroundColor: AppTheme.background);
     }
     if (_onboardingSeen == false) {
       return OnboardingScreen(
@@ -215,7 +214,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         // NOT during a regular `login()` call — otherwise the LoginScreen
         // gets unmounted mid-login and loses its inline error state.
         if (authProvider.isInitializing) {
-          return const Scaffold(backgroundColor: AppTheme.white);
+          return const Scaffold(backgroundColor: AppTheme.background);
         }
         if (!kIsWeb) FlutterNativeSplash.remove();
         if (authProvider.isAuthenticated) {

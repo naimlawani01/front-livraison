@@ -4,12 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/location_provider.dart';
 import 'package:mobile_core/mobile_core.dart';
+import '../courses/course_active_screen.dart';
 import '../courses/courses_disponibles_screen.dart';
 import '../courses/mes_courses_screen.dart';
 import '../profile/profile_screen.dart';
 import '../wallet/wallet_screen.dart';
 
 import '../../providers/course_provider.dart';
+import '../../widgets/course_en_cours_card.dart';
 import '../../providers/wallet_provider.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -84,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (!verified && idx == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Votre compte doit être vérifié pour voir les courses disponibles'),
+          content: const Text('Votre compte est en cours de vérification : les courses seront visibles une fois validé.'),
           backgroundColor: AppTheme.warning,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusSm)),
@@ -130,8 +132,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         onDestinationSelected: _navigateToTab,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.space_dashboard_outlined), selectedIcon: Icon(Icons.space_dashboard_rounded), label: 'Accueil'),
-          NavigationDestination(icon: Icon(Icons.delivery_dining), selectedIcon: Icon(Icons.delivery_dining_rounded), label: 'Disponibles'),
-          NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history_rounded), label: 'Mes courses'),
+          NavigationDestination(icon: Icon(Icons.delivery_dining), selectedIcon: Icon(Icons.delivery_dining_rounded), label: 'Courses'),
+          NavigationDestination(icon: Icon(Icons.history_outlined), selectedIcon: Icon(Icons.history_rounded), label: 'Historique'),
           NavigationDestination(icon: Icon(Icons.savings_outlined), selectedIcon: Icon(Icons.savings_rounded), label: 'Gains'),
           NavigationDestination(icon: Icon(Icons.person_outline_rounded), selectedIcon: Icon(Icons.person_rounded), label: 'Profil'),
         ],
@@ -140,11 +142,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 }
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   final void Function(int)? onNavigateToTab;
   const DashboardScreen({super.key, this.onNavigateToTab});
 
-  Future<void> _onRefresh(BuildContext context) async {
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  bool _toggling = false;
+
+  static const _statutsActifs = {'ACCEPTEE', 'EN_RECUPERATION', 'EN_LIVRAISON'};
+
+  Future<void> _onRefresh() async {
     await Future.wait([
       context.read<AuthProvider>().refreshProfile(),
       context.read<CourseProvider>().loadMesCourses(),
@@ -152,330 +163,276 @@ class DashboardScreen extends StatelessWidget {
     ]);
   }
 
+  Future<void> _basculerEnLigne() async {
+    if (_toggling) return;
+    final auth = context.read<AuthProvider>();
+    if (auth.livreur?.isVerified != true) {
+      UIUtils.showError(context, 'Votre compte est en cours de vérification');
+      return;
+    }
+    final loc = context.read<LocationProvider>();
+    final courses = context.read<CourseProvider>();
+    setState(() => _toggling = true);
+    if (loc.isTracking) {
+      loc.stopTracking();
+      courses.setDisponible(false);
+    } else {
+      await loc.startTracking();
+      if (loc.isTracking) courses.setDisponible(true);
+    }
+    // Resync de auth.livreur.isDisponible avec la BDD (LocationProvider a
+    // appelé updateDisponibilite mais le state local n'est pas notifié).
+    await auth.refreshProfile();
+    if (mounted) setState(() => _toggling = false);
+  }
+
+  void _reprendre(Course course) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => CourseActiveScreen(course: course)));
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthProvider>();
     final loc = context.watch<LocationProvider>();
+    final courses = context.watch<CourseProvider>();
+    final wallet = context.watch<WalletProvider>();
     final isOnline = loc.isTracking;
-    final isVerified = auth.livreur?.isVerified == true;
+
+    final active = courses.mesCourses.where((c) => _statutsActifs.contains(c.status.toUpperCase())).firstOrNull;
+
+    // Gains du jour = courses livrées aujourd'hui (espèces + Mobile Money) :
+    // le backend ne fournit que le total depuis l'inscription.
+    final now = DateTime.now();
+    final duJour = courses.mesCourses.where((c) {
+      final d = c.livreeAt?.toLocal();
+      return c.status.toUpperCase() == 'TERMINEE' && d != null && d.year == now.year && d.month == now.month && d.day == now.day;
+    }).toList();
+    final totalJour = duJour.fold<double>(0, (t, c) => t + c.montantLivreur);
+    final cashJour = duJour.where((c) => !c.isMobileMoney).fold<double>(0, (t, c) => t + c.montantLivreur);
+    final gainsJour = totalJour - cashJour;
+
+    final soldeGains = wallet.summary?.soldeDisponible ?? auth.livreur?.soldeDisponible ?? 0;
+
+    final String ctaLabel;
+    final VoidCallback? ctaAction;
+    if (active != null) {
+      ctaLabel = 'Reprendre la course';
+      ctaAction = () => _reprendre(active);
+    } else if (!isOnline) {
+      ctaLabel = 'Passer en ligne';
+      ctaAction = _basculerEnLigne;
+    } else {
+      ctaLabel = 'Voir les courses disponibles';
+      ctaAction = () => widget.onNavigateToTab?.call(1);
+    }
 
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: () => _onRefresh(context),
-          color: AppTheme.accent,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 24),
-
-              // Header
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => onNavigateToTab?.call(4),
-                    child: UserAvatar(
-                      photoUrl: auth.livreur?.photoProfilUrl,
-                      name: auth.livreur?.nomComplet,
-                      size: 48,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          children: [
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _onRefresh,
+                color: AppTheme.accent,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                  children: [
+                    // ── En-tête ──
+                    Row(
                       children: [
-                        Text(
-                          'Bonjour',
-                          style: Theme.of(context).textTheme.bodyMedium,
+                        GestureDetector(
+                          onTap: () => widget.onNavigateToTab?.call(4),
+                          child: UserAvatar(
+                            photoUrl: auth.livreur?.photoProfilUrl,
+                            name: auth.livreur?.nomComplet,
+                            size: 48,
+                          ),
                         ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Flexible(
-                              child: Text(
-                                auth.livreur?.nomComplet ?? 'Livreur',
-                                style: Theme.of(context).textTheme.headlineMedium,
-                                overflow: TextOverflow.ellipsis,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Bonjour', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      (auth.livreur?.nomComplet ?? 'Livreur').split(' ').first,
+                                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const BrandDots(size: 5),
+                                ],
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            const BrandDots(size: 5),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: AppTheme.background,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(Icons.notifications_outlined, color: AppTheme.textSecondary, size: 22),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 28),
+                    const SizedBox(height: 24),
 
-              // Stats
-              Row(
-                children: [
-                  Expanded(
-                    child: _StatCard(
-                      value: AppCurrency.format(auth.livreur?.totalGains ?? 0),
-                      label: 'Gains du jour',
-                      color: AppTheme.accent,
-                      filled: true,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _StatCard(
-                      value: '${auth.livreur?.nombreCoursesCompletees ?? 0}',
-                      label: 'Courses',
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                    // ── En ligne / hors ligne ──
+                    _InterrupteurEnLigne(enLigne: isOnline, enCours: _toggling, onTap: _basculerEnLigne),
+                    const SizedBox(height: 12),
 
-              // Online toggle
-              GestureDetector(
-                onTap: () async {
-                  if (!isVerified) {
-                    UIUtils.showError(context, 'Compte en attente de vérification');
-                    return;
-                  }
-                  final courses = context.read<CourseProvider>();
-                  final authProvider = context.read<AuthProvider>();
-                  if (isOnline) {
-                    loc.stopTracking();
-                    courses.setDisponible(false);
-                  } else {
-                    await loc.startTracking();
-                    if (loc.isTracking) courses.setDisponible(true);
-                  }
-                  // Resync de auth.livreur.isDisponible avec la BDD
-                  // (LocationProvider a appelé updateDisponibilite mais le
-                  // state local n'est pas notifié)
-                  await authProvider.refreshProfile();
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppTheme.white,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                    border: Border.all(color: isOnline ? AppTheme.success.withValues(alpha: 0.3) : AppTheme.divider),
-                    boxShadow: AppTheme.shadowSm,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: isOnline ? AppTheme.successLight : AppTheme.background,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          isOnline ? Icons.power_settings_new_rounded : Icons.power_off_rounded,
-                          color: isOnline ? AppTheme.success : AppTheme.textTertiary,
-                          size: 24,
-                        ),
+                    // ── Aujourd'hui (chiffre héros) ──
+                    _Carte(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Aujourd\'hui', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+                          const SizedBox(height: 8),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              AppCurrency.format(totalJour),
+                              style: AppTheme.mono(size: 40, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -1),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            duJour.isEmpty
+                                ? 'Aucune course livrée aujourd\'hui'
+                                : '${duJour.length} course${duJour.length > 1 ? 's' : ''} · ${AppCurrency.format(cashJour)} en espèces · ${AppCurrency.format(gainsJour)} sur vos Gains',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.35),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isOnline ? 'Vous êtes en ligne' : 'Vous êtes hors ligne',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: isOnline ? AppTheme.success : AppTheme.textPrimary,
+                    ),
+
+                    // ── Course en cours ──
+                    if (active != null) ...[
+                      const SizedBox(height: 12),
+                      CourseEnCoursCard(course: active, onTap: () => _reprendre(active)),
+                    ],
+                    const SizedBox(height: 12),
+
+                    // ── Gains à retirer ──
+                    Material(
+                      color: AppTheme.cardBg,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                      child: InkWell(
+                        onTap: () => widget.onNavigateToTab?.call(3),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('Gains à retirer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      AppCurrency.format(soldeGains),
+                                      style: AppTheme.mono(size: 20, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -0.3),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              isOnline ? 'Prêt à recevoir des courses' : 'Appuyez pour commencer',
-                              style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
-                            ),
-                          ],
+                              const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
+                            ],
+                          ),
                         ),
                       ),
-                      Switch.adaptive(
-                        activeThumbColor: AppTheme.success,
-                        value: isOnline,
-                        onChanged: (_) async {
-                          final courses = context.read<CourseProvider>();
-                          final authProvider = context.read<AuthProvider>();
-                          if (loc.isTracking) {
-                            loc.stopTracking();
-                            courses.setDisponible(false);
-                          } else {
-                            await loc.startTracking();
-                            if (loc.isTracking) courses.setDisponible(true);
-                          }
-                          await authProvider.refreshProfile();
-                        },
-                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: PrimaryCta(label: ctaLabel, loading: _toggling, onPressed: ctaAction),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Carte extends StatelessWidget {
+  final Widget child;
+  const _Carte({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        boxShadow: AppTheme.shadowMd,
+      ),
+      child: child,
+    );
+  }
+}
+
+class _InterrupteurEnLigne extends StatelessWidget {
+  final bool enLigne;
+  final bool enCours;
+  final VoidCallback onTap;
+  const _InterrupteurEnLigne({required this.enLigne, required this.enCours, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final fg = enLigne ? AppTheme.successDark : AppTheme.textPrimary;
+    return Semantics(
+      toggled: enLigne,
+      label: enLigne ? 'En ligne' : 'Hors ligne',
+      child: Material(
+        color: enLigne ? AppTheme.successLight : AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        child: InkWell(
+          onTap: enCours ? null : onTap,
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 64),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: enLigne ? AppTheme.success : AppTheme.textSecondary,
+                    shape: BoxShape.circle,
+                    boxShadow: enLigne ? [BoxShadow(color: AppTheme.success.withValues(alpha: 0.2), spreadRadius: 5)] : null,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(enLigne ? 'Vous êtes en ligne' : 'Vous êtes hors ligne',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: fg)),
+                      const SizedBox(height: 2),
+                      Text(enLigne ? 'Appuyez pour passer hors ligne' : 'Appuyez pour recevoir des courses',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: enLigne ? fg : AppTheme.textSecondary)),
                     ],
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 28),
-              Text(
-                'Actions rapides',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 14),
-
-              _ActionTile(
-                icon: Icons.delivery_dining_rounded,
-                title: 'Trouver des courses',
-                subtitle: 'Voir les courses à proximité',
-                color: AppTheme.accent,
-                onTap: () => onNavigateToTab?.call(1),
-              ),
-              const SizedBox(height: 10),
-              _ActionTile(
-                icon: Icons.history_rounded,
-                title: 'Historique des gains',
-                subtitle: 'Détails de vos revenus',
-                color: AppTheme.info,
-                onTap: () => onNavigateToTab?.call(2),
-              ),
-              const SizedBox(height: 10),
-              _ActionTile(
-                icon: Icons.savings_outlined,
-                title: 'Mes gains',
-                subtitle: 'Solde et retraits',
-                color: AppTheme.accent,
-                onTap: () => onNavigateToTab?.call(3),
-              ),
-              const SizedBox(height: 10),
-              _ActionTile(
-                icon: Icons.person_rounded,
-                title: 'Paramètres du profil',
-                subtitle: 'Véhicule et informations',
-                color: AppTheme.textSecondary,
-                onTap: () => onNavigateToTab?.call(4),
-              ),
-              const SizedBox(height: 32),
-            ],
+                IgnorePointer(
+                  child: Switch(
+                    value: enLigne,
+                    onChanged: (_) {},
+                    activeThumbColor: AppTheme.white,
+                    activeTrackColor: AppTheme.success,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  final String value;
-  final String label;
-  final Color color;
-  final bool filled;
-  const _StatCard({required this.value, required this.label, required this.color, this.filled = false});
-
-  @override
-  Widget build(BuildContext context) {
-    // Variante « hero » remplie (dégradé orange + glow) — utilisée pour les Gains.
-    if (filled) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-        decoration: BoxDecoration(
-          gradient: AppTheme.accentGradient,
-          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          boxShadow: [
-            BoxShadow(
-              color: AppTheme.accent.withValues(alpha: 0.28),
-              blurRadius: 18,
-              spreadRadius: -4,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(value, style: AppTheme.mono(size: 22, weight: FontWeight.w800, color: AppTheme.white, spacing: -0.5)),
-            const SizedBox(height: 4),
-            Text(label, style: TextStyle(fontSize: 12, color: AppTheme.white.withValues(alpha: 0.9), fontWeight: FontWeight.w500)),
-          ],
-        ),
-      );
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        border: Border.all(color: color.withValues(alpha: 0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(value, style: AppTheme.mono(size: 22, weight: FontWeight.w700, color: color, spacing: -0.5)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary, fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-}
-
-class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-  const _ActionTile({required this.icon, required this.title, required this.subtitle, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.background,
-          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
-                  const SizedBox(height: 2),
-                  Text(subtitle, style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: AppTheme.textTertiary, size: 20),
-          ],
         ),
       ),
     );

@@ -16,8 +16,10 @@ class AppTheme {
 
   static const Color success      = Color(0xFF12A06B); // vert fintech
   static const Color successLight = Color(0xFFECFDF5);
+  static const Color successDark  = Color(0xFF0B7A51); // texte vert lisible sur successLight
   static const Color warning      = Color(0xFFF59E0B);
   static const Color warningLight = Color(0xFFFFFBEB);
+  static const Color warningDark  = Color(0xFFB45309); // texte « en cours » lisible sur fond clair
   static const Color error        = Color(0xFFDC2626);
   static const Color errorLight   = Color(0xFFFEF2F2);
   static const Color info         = Color(0xFF3B82F6);
@@ -159,9 +161,9 @@ class AppTheme {
           backgroundColor: accent,
           foregroundColor: white,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          minimumSize: const Size(double.infinity, 52),
+          minimumSize: const Size(double.infinity, 56),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMd)),
-          textStyle: GoogleFonts.manrope(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.1),
+          textStyle: GoogleFonts.manrope(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.1),
         ),
       ),
 
@@ -172,9 +174,9 @@ class AppTheme {
           backgroundColor: accent,
           foregroundColor: white,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          minimumSize: const Size(double.infinity, 52),
+          minimumSize: const Size(double.infinity, 56),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMd)),
-          textStyle: GoogleFonts.manrope(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.1),
+          textStyle: GoogleFonts.manrope(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.1),
         ),
       ),
 
@@ -182,17 +184,18 @@ class AppTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: textPrimary,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          minimumSize: const Size(double.infinity, 52),
+          minimumSize: const Size(double.infinity, 56),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radiusMd)),
-          side: const BorderSide(color: Color(0xFFE5E7EB), width: 1.5),
-          textStyle: GoogleFonts.manrope(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.1),
+          side: const BorderSide(color: divider, width: 2),
+          textStyle: GoogleFonts.manrope(fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: -0.1),
         ),
       ),
 
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: textPrimary,
-          textStyle: GoogleFonts.manrope(fontSize: 14, fontWeight: FontWeight.w600),
+          minimumSize: const Size(48, 48),
+          textStyle: GoogleFonts.manrope(fontSize: 15, fontWeight: FontWeight.w800),
         ),
       ),
 
@@ -205,28 +208,37 @@ class AppTheme {
         },
       ),
 
+      // Champs blancs + contour fin : lisibles sur le fond chaud des écrans
+      // comme dans les feuilles blanches ; 56 px de haut (gants, soleil).
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? const Color(0xFF1F2937) : const Color(0xFFF7F5F1),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        fillColor: isDark ? const Color(0xFF1F2937) : white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: divider, width: 1.5),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: divider, width: 1.5),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: accent, width: 1.5),
+          borderSide: const BorderSide(color: accent, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusMd),
-          borderSide: const BorderSide(color: error, width: 1.5),
+          borderSide: const BorderSide(color: error, width: 2),
         ),
-        hintStyle: const TextStyle(color: textTertiary, fontSize: 15),
-        labelStyle: const TextStyle(color: textSecondary, fontSize: 15),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: error, width: 2),
+        ),
+        hintStyle: const TextStyle(color: textTertiary, fontSize: 15, fontWeight: FontWeight.w600),
+        labelStyle: const TextStyle(color: textSecondary, fontSize: 15, fontWeight: FontWeight.w600),
+        errorStyle: const TextStyle(color: error, fontSize: 13, fontWeight: FontWeight.w600),
+        prefixIconColor: textSecondary,
+        suffixIconColor: textSecondary,
       ),
 
       // NavigationBar — style maquette : labels visibles, onglet actif ORANGE.
@@ -236,17 +248,17 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        height: 68,
+        height: 72,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
-          return IconThemeData(color: selected ? accentDark : textTertiary, size: 24);
+          return IconThemeData(color: selected ? accentDark : textSecondary, size: 24);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return GoogleFonts.manrope(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: selected ? accentDark : textTertiary,
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            color: selected ? accentDark : textSecondary,
           );
         }),
       ),

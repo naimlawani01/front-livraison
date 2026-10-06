@@ -33,8 +33,16 @@ dans un écran : si un token manque, on l'ajoute à `AppTheme`.
 - **Montants** : toujours `AppTheme.mono(...)` (chiffres tabulaires) et `AppCurrency.format(...)`.
   La **valeur** est plus grande que son étiquette (« 8 800 GNF » > « Vos gains »).
 - **Espacements** : multiples de 4 (4, 8, 12, 16, 20, 24, 32). Écart entre groupes = 2× l'écart interne.
-- **Bouton principal** : widget `PrimaryCta` (`mobile_core/lib/widgets/primary_cta.dart`, 64 px,
-  `ctaGradient`, état « en cours » anti double appui). Ne pas en recréer un à la main.
+- **Composants partagés (`mobile_core/lib/widgets/`) — à utiliser, ne jamais les recréer à la main** :
+  | Besoin | Composant |
+  |---|---|
+  | Action principale (une par écran, en bas) | `PrimaryCta` (64 px, `ctaGradient`, `loading` anti double appui) |
+  | Action secondaire (Appeler, Itinéraire, Réessayer) | `SecondaryButton` (56 px, contour) |
+  | Statut d'une course | `CourseFrise(status:)` (horizontale) — jamais un badge texte |
+  | Chargement / vide / erreur / hors ligne | `LoadingState`, `EmptyState`, `ErrorState`, `OfflineState` |
+  | Pas de réseau (global) | `OfflineBanner` |
+  | Feuille du bas, confirmation | `AppSheet` + `AppSheetHeader`, `showConfirmAction(...)` |
+  | Indicateur « deux points » | `BrandDots` (statique), `BrandDotsPulse` (chargement) |
 - **Dégradé accent** (`accentGradient`) : réservé à **un seul** élément héros par écran
   (carte Gains, CTA principal). Deux dégradés sur un écran = trop.
 

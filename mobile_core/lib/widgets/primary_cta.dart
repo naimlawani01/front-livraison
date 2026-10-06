@@ -58,6 +58,38 @@ class PrimaryCta extends StatelessWidget {
   }
 }
 
+/// Action secondaire (Appeler, Itinéraire, Réessayer…) : contour, 56 px,
+/// jamais en accent plein pour ne pas concurrencer le [PrimaryCta].
+class SecondaryButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final VoidCallback? onPressed;
+
+  const SecondaryButton({super.key, required this.label, this.icon, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = OutlinedButton.styleFrom(
+      foregroundColor: AppTheme.textPrimary,
+      backgroundColor: AppTheme.cardBg,
+      minimumSize: const Size(56, 56),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      side: const BorderSide(color: AppTheme.divider, width: 2),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
+      textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+    );
+    if (icon == null) {
+      return OutlinedButton(onPressed: onPressed, style: style, child: Text(label));
+    }
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      style: style,
+      icon: Icon(icon, size: 20),
+      label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+    );
+  }
+}
+
 /// Indicateur de chargement « deux points » (motif de la marque), en blanc.
 class BrandDotsPulse extends StatefulWidget {
   final Color color;

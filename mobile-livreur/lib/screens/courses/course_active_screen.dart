@@ -50,6 +50,7 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
       icon: Icons.directions_rounded,
       actionLabel: 'Je suis chez l\'expéditeur',
       nextStatus: 'EN_RECUPERATION',
+      confirmMessage: 'L\'expéditeur sera prévenu de votre arrivée.',
     ),
     _StepData(
       title: 'Récupération de la course',
@@ -60,6 +61,9 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
       icon: Icons.storefront_rounded,
       actionLabel: 'Colis récupéré',
       nextStatus: 'EN_LIVRAISON',
+      confirmMessage: _course.montantCashARecuperer > 0
+          ? 'Vérifiez que vous avez bien le colis et ${AppCurrency.format(_course.montantCashARecuperer)} en espèces.'
+          : 'Vérifiez que vous avez bien le colis.',
     ),
     _StepData(
       title: 'En livraison vers le client',
@@ -68,6 +72,7 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
       // Le client ne paie plus le livreur : rien à encaisser à la porte.
       actionLabel: 'Livraison effectuée',
       nextStatus: 'TERMINEE',
+      confirmMessage: 'Confirmez seulement une fois le colis remis au client.',
     ),
     const _StepData(
       title: 'Livraison terminée',
@@ -94,15 +99,14 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
       );
       if (pinCode == null || !mounted) return;
     } else {
-      final confirmed = await showModalBottomSheet<bool>(
-        context: context,
-        backgroundColor: Colors.transparent,
-        builder: (ctx) => _ConfirmSheet(
-          label: step.actionLabel,
-          icon: step.icon,
-        ),
+      final confirmed = await showConfirmAction(
+        context,
+        icon: step.icon,
+        title: step.actionLabel,
+        message: step.confirmMessage,
+        confirmLabel: 'Confirmer',
       );
-      if (confirmed != true || !mounted) return;
+      if (!confirmed || !mounted) return;
     }
 
     setState(() => _updating = true);
@@ -155,30 +159,48 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
 
   Future<void> _cancelCourse() async {
     final raisonCtrl = TextEditingController();
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Annuler la course'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => AppSheet(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Voulez-vous vraiment annuler cette course ?'),
+            const AppSheetHeader(
+              icon: Icons.cancel_outlined,
+              title: 'Annuler la course ?',
+              message: 'Elle sera proposée à un autre livreur. Les annulations répétées sont suivies.',
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: raisonCtrl,
-              decoration: const InputDecoration(hintText: 'Raison de l\'annulation'),
               maxLines: 2,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+              decoration: InputDecoration(
+                hintText: 'Raison (facultatif)',
+                filled: true,
+                fillColor: AppTheme.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            PrimaryCta(label: 'Annuler la course', onPressed: () => Navigator.pop(ctx, true)),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.textSecondary,
+                minimumSize: const Size.fromHeight(48),
+                textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+              ),
+              child: const Text('Garder la course'),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Retour')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppTheme.error),
-            child: const Text('Confirmer l\'annulation'),
-          ),
-        ],
       ),
     );
 
@@ -406,7 +428,7 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
                                   ? _Encadre(label: 'Espèces à récupérer', montant: AppCurrency.format(_course.montantCashARecuperer))
                                   : const _Encadre(label: 'Payée par Mobile Money : vos gains sont crédités à la livraison'),
                               actions: [
-                                _ActionSecondaire(icon: Icons.navigation_rounded, label: 'Itinéraire', onTap: _navigate),
+                                SecondaryButton(icon: Icons.navigation_rounded, label: 'Itinéraire', onPressed: _navigate),
                               ],
                             )
                           : _EtapeResume(
@@ -427,12 +449,12 @@ class _CourseActiveScreenState extends State<CourseActiveScreen> with TickerProv
                                   ? const _Encadre(label: 'Demandez au client le code à 4 chiffres reçu par SMS')
                                   : null,
                               actions: [
-                                _ActionSecondaire(
+                                SecondaryButton(
                                   icon: Icons.phone_rounded,
                                   label: 'Appeler',
-                                  onTap: () => _callPhone(_course.contactClientTelephone),
+                                  onPressed: () => _callPhone(_course.contactClientTelephone),
                                 ),
-                                _ActionSecondaire(icon: Icons.navigation_rounded, label: 'Itinéraire', onTap: _navigate),
+                                SecondaryButton(icon: Icons.navigation_rounded, label: 'Itinéraire', onPressed: _navigate),
                               ],
                             )
                           : _EtapeResume(
@@ -491,7 +513,8 @@ class _StepData {
   final IconData icon;
   final String actionLabel;
   final String nextStatus;
-  const _StepData({required this.title, required this.subtitle, required this.icon, required this.actionLabel, required this.nextStatus});
+  final String? confirmMessage;
+  const _StepData({required this.title, required this.subtitle, required this.icon, required this.actionLabel, required this.nextStatus, this.confirmMessage});
 }
 
 // ── Frise verticale (signature Sönaiyaa) ──
@@ -598,7 +621,7 @@ class _CarteEtape extends StatelessWidget {
   final String? adresse;
   final String? note;
   final _Encadre? encadre;
-  final List<_ActionSecondaire> actions;
+  final List<SecondaryButton> actions;
   const _CarteEtape({
     required this.label,
     required this.titre,
@@ -678,30 +701,6 @@ class _Encadre extends StatelessWidget {
   }
 }
 
-class _ActionSecondaire extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  const _ActionSecondaire({required this.icon, required this.label, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 56,
-      child: OutlinedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 20),
-        label: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppTheme.textPrimary,
-          side: const BorderSide(color: AppTheme.divider, width: 2),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
-        ),
-      ),
-    );
-  }
-}
-
 class _RoundButton extends StatelessWidget {
   final IconData icon;
   final String semanticLabel;
@@ -748,71 +747,6 @@ class _PillButton extends StatelessWidget {
   }
 }
 
-// ── Bottom sheet de confirmation ──
-class _ConfirmSheet extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  const _ConfirmSheet({required this.label, required this.icon});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-      decoration: const BoxDecoration(
-        color: AppTheme.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusXl)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 36, height: 4, decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 24),
-          Container(
-            width: 56, height: 56,
-            decoration: BoxDecoration(
-              color: AppTheme.accent.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: AppTheme.accent, size: 28),
-          ),
-          const SizedBox(height: 16),
-          const Text('Confirmer l\'action', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.4),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Annuler'),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Confirmer'),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 // ── Récap financier de la course ──
 class _FinancialSummary extends StatelessWidget {
   final Course course;
@@ -822,13 +756,13 @@ class _FinancialSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final paymentColor = _isCash ? AppTheme.warning : AppTheme.success;
-    final paymentBg = _isCash ? AppTheme.warningLight : AppTheme.successLight;
+    final paymentColor = _isCash ? AppTheme.accentDark : AppTheme.success;
+    final paymentBg = _isCash ? AppTheme.accentLight : AppTheme.successLight;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.white,
+        color: AppTheme.cardBg,
         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
         border: Border.all(color: AppTheme.divider),
       ),
@@ -842,10 +776,10 @@ class _FinancialSummary extends StatelessWidget {
                   size: 18, color: AppTheme.textSecondary),
               const SizedBox(width: 8),
               const Text(
-                'Détails financiers',
+                'Détail du prix',
                 style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
                   color: AppTheme.textPrimary,
                 ),
               ),
@@ -869,8 +803,8 @@ class _FinancialSummary extends StatelessWidget {
                     Text(
                       _isCash ? 'Espèces' : 'Mobile Money',
                       style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
                         color: paymentColor,
                       ),
                     ),
@@ -907,7 +841,7 @@ class _FinancialSummary extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline_rounded, size: 14, color: AppTheme.textTertiary),
+                const Icon(Icons.info_outline_rounded, size: 14, color: AppTheme.textSecondary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -915,7 +849,7 @@ class _FinancialSummary extends StatelessWidget {
                         ? 'L\'expéditeur vous remet ${AppCurrency.format(course.montantLivreur)} en espèces à la récupération du colis.'
                         : 'Course payée en ligne. Votre part est créditée sur vos Gains à la livraison.',
                     style: const TextStyle(
-                      fontSize: 11,
+                      fontSize: 13,
                       color: AppTheme.textSecondary,
                       height: 1.4,
                     ),
@@ -951,8 +885,8 @@ class _FinLine extends StatelessWidget {
         Text(
           label,
           style: TextStyle(
-            fontSize: big ? 14 : 13,
-            fontWeight: big ? FontWeight.w700 : FontWeight.w500,
+            fontSize: big ? 15 : 13,
+            fontWeight: big ? FontWeight.w800 : FontWeight.w600,
             color: big ? AppTheme.textPrimary : AppTheme.textSecondary,
           ),
         ),
@@ -970,7 +904,7 @@ class _FinLine extends StatelessWidget {
   }
 }
 
-// ── Bottom sheet pour Code PIN ──
+// ── Feuille du code de livraison ──
 class _PinCodeSheet extends StatefulWidget {
   const _PinCodeSheet();
 
@@ -982,85 +916,59 @@ class _PinCodeSheetState extends State<_PinCodeSheet> {
   final TextEditingController _pinCtrl = TextEditingController();
 
   @override
+  void dispose() {
+    _pinCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-        decoration: const BoxDecoration(
-          color: AppTheme.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusXl)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 36, height: 4, decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 24),
-            Container(
-              width: 56, height: 56,
-              decoration: BoxDecoration(
-                color: AppTheme.warning.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.lock_rounded, color: AppTheme.warning, size: 28),
-            ),
-            const SizedBox(height: 16),
-            const Text('Code de sécurité', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            const Text(
-              'Demandez le code PIN au client pour valider cette livraison sécurisée.',
-              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.4),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            TextField(
-              controller: _pinCtrl,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              maxLength: 6,
-              style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.w800),
-              decoration: InputDecoration(
-                hintText: '----',
-                counterText: '',
-                filled: true,
-                fillColor: AppTheme.background,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  borderSide: BorderSide.none,
-                ),
+    return AppSheet(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const AppSheetHeader(
+            icon: Icons.lock_rounded,
+            title: 'Code de livraison',
+            message: 'Demandez au client le code à 4 chiffres reçu par SMS.',
+          ),
+          const SizedBox(height: 24),
+          TextField(
+            controller: _pinCtrl,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.center,
+            maxLength: 4,
+            onChanged: (_) => setState(() {}),
+            style: AppTheme.mono(size: 32, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: 16),
+            decoration: InputDecoration(
+              hintText: '• • • •',
+              counterText: '',
+              filled: true,
+              fillColor: AppTheme.background,
+              contentPadding: const EdgeInsets.symmetric(vertical: 16),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                borderSide: BorderSide.none,
               ),
             ),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 52,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Annuler'),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SizedBox(
-                    height: 52,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppTheme.warning),
-                      onPressed: () {
-                        if (_pinCtrl.text.isNotEmpty) {
-                          Navigator.pop(context, _pinCtrl.text);
-                        }
-                      },
-                      child: const Text('Valider'),
-                    ),
-                  ),
-                ),
-              ],
+          ),
+          const SizedBox(height: 16),
+          PrimaryCta(
+            label: 'Valider la livraison',
+            onPressed: _pinCtrl.text.length == 4 ? () => Navigator.pop(context, _pinCtrl.text) : null,
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              foregroundColor: AppTheme.textSecondary,
+              minimumSize: const Size.fromHeight(48),
+              textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
             ),
-          ],
-        ),
+            child: const Text('Retour'),
+          ),
+        ],
       ),
     );
   }

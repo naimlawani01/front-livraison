@@ -75,7 +75,7 @@ class AppFormField extends StatelessWidget {
       maxLength: maxLength,
       onChanged: onChanged,
       onFieldSubmitted: onSubmitted,
-      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
