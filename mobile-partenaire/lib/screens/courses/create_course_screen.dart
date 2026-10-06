@@ -129,7 +129,7 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
         await _showSuccessSheet(context);
         if (mounted) Navigator.pop(context);
       } else {
-        UIUtils.showError(context, provider.error ?? 'Erreur lors de la création');
+        UIUtils.showError(context, provider.error ?? 'La course n\'a pas pu être créée. Réessayez.');
       }
     } on ApiValidationException catch (e) {
       if (!mounted) return;
@@ -148,62 +148,27 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
     final payeurClient = _payeur == 'client';
     final nomClient = _nomClientController.text.trim();
     final partLivreur = course?.montantLivreur ?? _repartition.$2;
-    final String ligne1;
-    final String ligne2;
+    final String message;
     if (payeurClient) {
-      ligne1 = 'Un SMS de paiement a été envoyé à $nomClient.';
-      ligne2 = 'La course sera proposée aux livreurs dès que votre client a payé. '
-          'Votre commission vous sera alors rendue.';
+      message = '$nomClient a reçu un SMS de paiement. La course sera proposée aux livreurs dès qu\'il a payé, '
+          'et votre commission vous sera rendue.';
     } else if (isMM) {
-      ligne1 = 'Réglez ${AppCurrency.format(partLivreur)} par Mobile Money depuis le détail de la course.';
-      ligne2 = 'La course sera proposée aux livreurs dès que le paiement est confirmé.';
+      message = 'Réglez ${AppCurrency.format(partLivreur)} par Mobile Money depuis le détail de la course. '
+          'Elle sera proposée aux livreurs dès le paiement confirmé.';
     } else {
-      ligne1 = 'Un livreur disponible va être assigné à la course.';
-      ligne2 = 'Remettez-lui ${AppCurrency.format(partLivreur)} en espèces à la récupération du colis.';
+      message = 'Elle est proposée aux livreurs proches. Remettez ${AppCurrency.format(partLivreur)} en espèces '
+          'au livreur quand il récupère le colis.';
     }
     await showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      isDismissible: true,
-      builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 40),
-        decoration: const BoxDecoration(
-          color: AppTheme.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(AppTheme.radiusXl)),
-        ),
+      builder: (ctx) => AppSheet(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(width: 36, height: 4, decoration: BoxDecoration(color: AppTheme.divider, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(height: 28),
-            Container(
-              width: 64, height: 64,
-              decoration: const BoxDecoration(color: AppTheme.successLight, shape: BoxShape.circle),
-              child: const Icon(Icons.check_rounded, color: AppTheme.success, size: 36),
-            ),
-            const SizedBox(height: 20),
-            const Text('Livraison créée !', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
-            const SizedBox(height: 8),
-            Text(
-              ligne1,
-              style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, height: 1.5),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              ligne2,
-              style: const TextStyle(fontSize: 13, color: AppTheme.textTertiary, height: 1.4),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 28),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(_),
-                child: const Text('Voir mes courses'),
-              ),
-            ),
+            AppSheetHeader(icon: Icons.check_rounded, title: 'Course créée', message: message),
+            const SizedBox(height: 24),
+            PrimaryCta(label: 'Voir mes courses', onPressed: () => Navigator.pop(ctx)),
           ],
         ),
       ),
@@ -230,321 +195,239 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final payeurClient = _payeur == 'client';
+    final mobileMoney = _modePaiement == 'MOBILE_MONEY';
+    final (commission, partLivreur) = _repartition;
+
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
-        backgroundColor: AppTheme.white,
+        backgroundColor: AppTheme.background,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Nouvelle livraison'),
+        title: const Text('Nouvelle course'),
       ),
       body: SafeArea(
         child: Form(
           key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+          child: Column(
             children: [
-              // ── Section Client ────────────────────────────────────────
-              const _SectionHeader(
-                title: 'Client',
-                subtitle: 'Personne à livrer',
-              ),
-              AppFormField(
-                controller: _nomClientController,
-                label: 'Nom du client',
-                icon: Icons.person_outline_rounded,
-                hint: 'Ex : Aïssatou Diallo',
-                serverError: _nomServerError,
-                onChanged: (_) {
-                  if (_nomServerError != null) {
-                    setState(() => _nomServerError = null);
-                  }
-                },
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Nom requis' : null,
-              ),
-              const SizedBox(height: 14),
-              GuineaPhoneField(
-                controller: _telClientController,
-                label: 'Téléphone client',
-                errorText: _telServerError,
-                onChanged: (_) {
-                  if (_telServerError != null) {
-                    setState(() => _telServerError = null);
-                  }
-                },
-              ),
-
-              const SizedBox(height: 32),
-
-              // ── Section Colis ─────────────────────────────────────────
-              const _SectionHeader(
-                title: 'Colis',
-                subtitle: 'Aide le livreur à savoir quoi récupérer',
-              ),
-              AppFormField(
-                controller: _descriptionColisController,
-                label: 'Description (optionnel)',
-                icon: Icons.inventory_2_outlined,
-                hint: 'Ex : 2 plats du jour, médicaments, courses…',
-                maxLines: 2,
-              ),
-              const SizedBox(height: 16),
-              const _FieldLabel('Type de colis'),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  // Multiplicateurs cachés + 3 catégories alignées sur le backend
-                  // (standard 1.0 · fragile 1.2 · volumineux 1.4).
-                  _ColisChip(
-                    label: 'Standard',
-                    selected: _natureColis == 'standard',
-                    onTap: () {
-                      setState(() => _natureColis = 'standard');
-                      _maybeEstimer();
-                    },
-                  ),
-                  _ColisChip(
-                    label: 'Fragile',
-                    selected: _natureColis == 'fragile',
-                    onTap: () {
-                      setState(() => _natureColis = 'fragile');
-                      _maybeEstimer();
-                    },
-                  ),
-                  _ColisChip(
-                    label: 'Volumineux',
-                    selected: _natureColis == 'volumineux',
-                    onTap: () {
-                      setState(() => _natureColis = 'volumineux');
-                      _maybeEstimer();
-                    },
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-
-              // ── Section Livraison ─────────────────────────────────────
-              const _SectionHeader(
-                title: 'Livraison',
-                subtitle: 'Adresse et instructions',
-              ),
-              AppFormField(
-                controller: _adresseController,
-                label: 'Quartier / Zone (optionnel)',
-                icon: Icons.location_on_outlined,
-                hint: 'Ex : Quartier Almamya, près du marché',
-                maxLines: 2,
-              ),
-              const SizedBox(height: 14),
-              AppFormField(
-                controller: _instructionsController,
-                label: 'Indications (optionnel)',
-                icon: Icons.notes_rounded,
-                hint: 'Ex : Après le carrefour, portail vert, 2ème maison',
-                maxLines: 3,
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.infoLight,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                ),
-                child: Row(
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   children: [
-                    const Icon(Icons.link_rounded, size: 18, color: AppTheme.info),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        "Après création, envoyez un lien GPS au client. Le prix s'ajustera dès qu'il partage sa position.",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AppTheme.textPrimary.withValues(alpha: 0.75),
-                          height: 1.4,
+                    // ── 1. Client ──
+                    const _Titre('Votre client'),
+                    AppFormField(
+                      controller: _nomClientController,
+                      label: 'Nom du client',
+                      icon: Icons.person_outline_rounded,
+                      hint: 'Ex : Aïssatou Diallo',
+                      textInputAction: TextInputAction.next,
+                      serverError: _nomServerError,
+                      onChanged: (_) {
+                        if (_nomServerError != null) setState(() => _nomServerError = null);
+                      },
+                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Indiquez le nom du client' : null,
+                    ),
+                    const SizedBox(height: 12),
+                    GuineaPhoneField(
+                      controller: _telClientController,
+                      label: 'Téléphone du client',
+                      errorText: _telServerError,
+                      onChanged: (_) {
+                        if (_telServerError != null) setState(() => _telServerError = null);
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    const _Aide('Il recevra par SMS un lien pour indiquer sa position, puis le code de livraison.'),
+
+                    // ── 2. Qui paie ──
+                    const SizedBox(height: 32),
+                    const _Titre('Qui paie la livraison ?'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _Tuile(
+                            icon: Icons.storefront_rounded,
+                            label: 'Moi',
+                            selected: !payeurClient,
+                            onTap: () => _choisirPayeur('expediteur'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _Tuile(
+                            icon: Icons.person_rounded,
+                            label: 'Mon client',
+                            selected: payeurClient,
+                            onTap: () => _choisirPayeur('client'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (payeurClient)
+                      const _Aide('Votre client paie par Mobile Money avec le lien reçu par SMS.')
+                    else ...[
+                      const Text('Vous réglez le livreur', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecondary)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _Tuile(
+                              icon: Icons.payments_outlined,
+                              label: 'En espèces',
+                              selected: !mobileMoney,
+                              onTap: () => _choisirMode('CASH'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _Tuile(
+                              icon: Icons.phone_android_rounded,
+                              label: 'Mobile Money',
+                              selected: mobileMoney,
+                              onTap: () => _choisirMode('MOBILE_MONEY'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    // ── 3. Colis ──
+                    const SizedBox(height: 32),
+                    const _Titre('Le colis'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        // 3 catégories alignées sur le backend (standard · fragile · volumineux).
+                        for (final (valeur, label) in const [('standard', 'Standard'), ('fragile', 'Fragile'), ('volumineux', 'Volumineux')])
+                          ChoiceChip(
+                            label: Text(label),
+                            selected: _natureColis == valeur,
+                            showCheckmark: false,
+                            onSelected: (_) {
+                              setState(() => _natureColis = valeur);
+                              _maybeEstimer();
+                            },
+                            labelStyle: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: _natureColis == valeur ? AppTheme.accentDark : AppTheme.textPrimary,
+                            ),
+                            backgroundColor: AppTheme.cardBg,
+                            selectedColor: AppTheme.accentLight,
+                            side: BorderSide(color: _natureColis == valeur ? AppTheme.accent : AppTheme.divider, width: 2),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusSm)),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                          ),
+                      ],
+                    ),
+
+                    // ── 4. Précisions (facultatives, repliées) ──
+                    const SizedBox(height: 16),
+                    Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: const EdgeInsets.only(bottom: 8),
+                        iconColor: AppTheme.textPrimary,
+                        collapsedIconColor: AppTheme.textPrimary,
+                        title: const Text('Ajouter des précisions', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+                        subtitle: const Text('Contenu, quartier, indications — facultatif', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+                        children: [
+                          AppFormField(
+                            controller: _descriptionColisController,
+                            label: 'Contenu du colis',
+                            icon: Icons.inventory_2_outlined,
+                            hint: 'Ex : 2 plats du jour, médicaments…',
+                            maxLines: 2,
+                          ),
+                          const SizedBox(height: 12),
+                          AppFormField(
+                            controller: _adresseController,
+                            label: 'Quartier',
+                            icon: Icons.location_on_outlined,
+                            hint: 'Ex : Almamya, près du marché',
+                          ),
+                          const SizedBox(height: 12),
+                          AppFormField(
+                            controller: _instructionsController,
+                            label: 'Indications pour le livreur',
+                            icon: Icons.notes_rounded,
+                            hint: 'Ex : après le carrefour, portail vert',
+                            maxLines: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // ── 5. Code de livraison ──
+                    Material(
+                      color: AppTheme.cardBg,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                      child: SwitchListTile(
+                        value: _exigeCodeLivraison,
+                        onChanged: (v) => setState(() => _exigeCodeLivraison = v),
+                        activeTrackColor: AppTheme.success,
+                        activeThumbColor: AppTheme.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
+                        title: const Text('Code de livraison', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+                        subtitle: const Text(
+                          'Le client reçoit un code par SMS ; le livreur le lui demande à la remise. Recommandé.',
+                          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.35),
                         ),
                       ),
+                    ),
+
+                    // ── 6. Ce que ça coûte ──
+                    const SizedBox(height: 32),
+                    const _Titre('Ce que ça coûte'),
+                    _Recapitulatif(
+                      prix: _prixCourant,
+                      commission: commission,
+                      partLivreur: partLivreur,
+                      payeurClient: payeurClient,
+                      mobileMoney: mobileMoney,
+                      provisoire: _estimation == null,
+                      estimationEnCours: _isEstimating,
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 32),
-
-              // ── Section Prix ─────────────────────────────────────────
-              const _SectionHeader(
-                title: 'Prix de la livraison',
-                subtitle: 'Calculé automatiquement, non modifiable',
-              ),
-              _PriceCard(
-                isEstimating: _isEstimating,
-                estimation: _estimation,
-                prixDefaut: _prixDefaut,
-                hasGps: _latClient != null,
-              ),
-
-              const SizedBox(height: 32),
-
-              _RepartitionCard(
-                commission: _repartition.$1,
-                partLivreur: _repartition.$2,
-                prix: _prixCourant,
-                payeurClient: _payeur == 'client',
-                mobileMoney: _modePaiement == 'MOBILE_MONEY',
-              ),
-
-              const SizedBox(height: 32),
-
-              // ── Qui paie la livraison ────────────────────────────────
-              const _SectionHeader(
-                title: 'Qui paie la livraison ?',
-                subtitle: 'Vous, ou votre client par Mobile Money',
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: _PaymentOption(
-                      icon: Icons.storefront_rounded,
-                      label: 'Moi',
-                      selected: _payeur == 'expediteur',
-                      onTap: () => _choisirPayeur('expediteur'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _PaymentOption(
-                      icon: Icons.person_rounded,
-                      label: 'Mon client',
-                      selected: _payeur == 'client',
-                      onTap: () => _choisirPayeur('client'),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // ── Section Mode de paiement ─────────────────────────────
-              _SectionHeader(
-                title: 'Mode de paiement',
-                subtitle: _payeur == 'client'
-                    ? 'Votre client reçoit un lien de paiement par SMS'
-                    : 'Comment vous réglez le livreur',
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: Opacity(
-                      opacity: _payeur == 'client' ? 0.4 : 1,
-                      child: _PaymentOption(
-                        icon: Icons.payments_outlined,
-                        label: 'Espèces',
-                        selected: _modePaiement == 'CASH',
-                        onTap: () => _choisirMode('CASH'),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _PaymentOption(
-                      icon: Icons.phone_android_rounded,
-                      label: 'Mobile Money',
-                      selected: _modePaiement == 'MOBILE_MONEY',
-                      onTap: () => _choisirMode('MOBILE_MONEY'),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
-              // ── Option sécurité ───────────────────────────────────────
-              GestureDetector(
-                onTap: () => setState(() => _exigeCodeLivraison = !_exigeCodeLivraison),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: _exigeCodeLivraison
-                        ? AppTheme.warning.withValues(alpha: 0.08)
-                        : AppTheme.background,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                    border: Border.all(
-                      color: _exigeCodeLivraison
-                          ? AppTheme.warning.withValues(alpha: 0.4)
-                          : AppTheme.divider,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 22, height: 22,
-                        child: Checkbox(
-                          value: _exigeCodeLivraison,
-                          activeColor: AppTheme.warning,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
+              // ── Prix + action, toujours visibles ──
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                decoration: BoxDecoration(color: AppTheme.cardBg, boxShadow: AppTheme.shadowLg),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            payeurClient
+                                ? 'Payé par votre client'
+                                : (_estimation == null ? 'Prix de la course · provisoire' : 'Prix de la course'),
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
                           ),
-                          onChanged: (val) =>
-                              setState(() => _exigeCodeLivraison = val ?? false),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Livraison sécurisée (code PIN)',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Un code est envoyé à votre client par SMS. Le livreur le lui demande à la remise du colis. Recommandé.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppTheme.textSecondary,
-                                height: 1.4,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // ── Submit ────────────────────────────────────────────────
-              Consumer<CourseProvider>(
-                builder: (context, provider, _) {
-                  return SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton(
-                      onPressed: provider.isLoading ? null : _handleSubmit,
-                      child: provider.isLoading
-                          ? const SizedBox(
-                              width: 22, height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5, color: AppTheme.white,
-                              ),
-                            )
-                          : const Text('Créer et diffuser'),
+                        Text(AppCurrency.format(_prixCourant),
+                            style: AppTheme.mono(size: 20, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -0.3)),
+                      ],
                     ),
-                  );
-                },
+                    const SizedBox(height: 12),
+                    PrimaryCta(
+                      label: 'Créer la course',
+                      loading: context.watch<CourseProvider>().isLoading,
+                      onPressed: _handleSubmit,
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -554,249 +437,100 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
   }
 }
 
-// ── Carte Prix (affichage seul, non modifiable) ────────────────────────────
+// ── Récapitulatif : coût et répartition, avant validation ────────────────────
 
-class _PriceCard extends StatelessWidget {
-  final bool isEstimating;
-  final Map<String, dynamic>? estimation;
-  final double prixDefaut;
-  final bool hasGps;
-
-  const _PriceCard({
-    required this.isEstimating,
-    required this.estimation,
-    required this.prixDefaut,
-    required this.hasGps,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (isEstimating) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppTheme.background,
-          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          border: Border.all(color: AppTheme.divider),
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(
-              width: 18, height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            SizedBox(width: 12),
-            Text(
-              'Calcul du prix…',
-              style: TextStyle(fontSize: 14, color: AppTheme.textSecondary),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (estimation != null) {
-      final prix = (estimation!['prix_estime'] as num).toDouble();
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppTheme.success.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          border: Border.all(color: AppTheme.success.withValues(alpha: 0.3)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.check_circle_rounded, size: 18, color: AppTheme.success),
-                const SizedBox(width: 8),
-                const Text(
-                  'Prix calculé',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppTheme.success,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  AppCurrency.format(prix),
-                  style: AppTheme.mono(
-                    size: 22,
-                    weight: FontWeight.w800,
-                    color: AppTheme.textPrimary,
-                    spacing: -0.6,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            _DetailRow(
-              icon: Icons.route_rounded,
-              label: 'Distance',
-              value: '${estimation!["distance_km"]} km',
-            ),
-            const SizedBox(height: 6),
-            _DetailRow(
-              icon: Icons.timer_outlined,
-              label: 'Durée estimée',
-              value: '${estimation!["duree_estimee_minutes"]} min',
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Pas encore d'estimation : prix provisoire
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        border: Border.all(color: AppTheme.divider),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(
-                Icons.gps_not_fixed_rounded,
-                size: 18,
-                color: AppTheme.textTertiary,
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'Prix provisoire',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textTertiary,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                AppCurrency.format(prixDefaut),
-                style: AppTheme.mono(
-                  size: 22,
-                  weight: FontWeight.w700,
-                  color: AppTheme.textPrimary,
-                  spacing: -0.6,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Le prix final sera ajusté automatiquement selon la distance dès que le client partage sa position GPS.',
-            style: TextStyle(
-              fontSize: 12,
-              color: AppTheme.textSecondary,
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RepartitionCard extends StatelessWidget {
+class _Recapitulatif extends StatelessWidget {
+  final double prix;
   final double commission;
   final double partLivreur;
-  final double prix;
   final bool payeurClient;
   final bool mobileMoney;
+  final bool provisoire;
+  final bool estimationEnCours;
 
-  const _RepartitionCard({
+  const _Recapitulatif({
+    required this.prix,
     required this.commission,
     required this.partLivreur,
-    required this.prix,
     required this.payeurClient,
     required this.mobileMoney,
+    required this.provisoire,
+    required this.estimationEnCours,
   });
 
   @override
   Widget build(BuildContext context) {
     final String explication;
     if (payeurClient) {
-      explication = 'Votre client paie ${AppCurrency.format(prix)} par Mobile Money. '
-          'La commission est bloquée sur votre Crédit puis vous est rendue dès qu\'il a payé : '
-          'la livraison ne vous coûte rien.';
+      explication = 'Votre client paie ${AppCurrency.format(prix)} par Mobile Money. La commission est bloquée '
+          'sur votre Crédit puis vous est rendue dès qu\'il a payé : la course ne vous coûte rien.';
     } else if (mobileMoney) {
-      explication = 'Vous réglez ${AppCurrency.format(partLivreur)} par Mobile Money, '
-          'plus la commission prise sur votre Crédit.';
+      explication = 'Vous réglez ${AppCurrency.format(partLivreur)} par Mobile Money ; la commission est prise sur votre Crédit.';
     } else {
-      explication = 'Vous remettez ${AppCurrency.format(partLivreur)} en espèces au livreur '
-          'à la récupération, plus la commission prise sur votre Crédit.';
+      explication = 'Vous remettez ${AppCurrency.format(partLivreur)} en espèces au livreur quand il récupère le colis ; '
+          'la commission est prise sur votre Crédit.';
     }
     return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-        border: Border.all(color: AppTheme.divider),
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        boxShadow: AppTheme.shadowMd,
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _DetailRow(
-            icon: Icons.delivery_dining_rounded,
-            label: 'Part du livreur (88 %)',
-            value: AppCurrency.format(partLivreur),
-          ),
-          const SizedBox(height: 6),
-          _DetailRow(
-            icon: Icons.account_balance_wallet_outlined,
-            label: 'Commission Sönaiyaa (12 %)',
-            value: AppCurrency.format(commission),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            explication,
-            style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.4),
-          ),
+          _Ligne(label: 'Part du livreur (88 %)', valeur: AppCurrency.format(partLivreur)),
+          const SizedBox(height: 8),
+          _Ligne(label: 'Commission Sönaiyaa (12 %)', valeur: AppCurrency.format(commission)),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          _Ligne(label: 'Prix de la course', valeur: AppCurrency.format(prix), fort: true),
+          const SizedBox(height: 12),
+          Text(explication, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.4)),
+          if (provisoire) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: AppTheme.accentLight, borderRadius: BorderRadius.circular(AppTheme.radiusSm)),
+              child: Row(
+                children: [
+                  if (estimationEnCours) ...[
+                    const BrandDotsPulse(color: AppTheme.accentDark),
+                    const SizedBox(width: 12),
+                  ],
+                  const Expanded(
+                    child: Text(
+                      'Prix provisoire : il s\'ajuste à la distance dès que votre client partage sa position.',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.accentDark, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
+class _Ligne extends StatelessWidget {
   final String label;
-  final String value;
-
-  const _DetailRow({required this.icon, required this.label, required this.value});
+  final String valeur;
+  final bool fort;
+  const _Ligne({required this.label, required this.valeur, this.fort = false});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: AppTheme.textTertiary),
-        const SizedBox(width: 8),
-        Text(
-          label,
-          style: const TextStyle(fontSize: 13, color: AppTheme.textSecondary),
+        Expanded(
+          child: Text(label,
+              style: TextStyle(fontSize: fort ? 15 : 13, fontWeight: fort ? FontWeight.w800 : FontWeight.w600, color: fort ? AppTheme.textPrimary : AppTheme.textSecondary)),
         ),
-        const Spacer(),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textPrimary,
-          ),
-        ),
+        Text(valeur, style: AppTheme.mono(size: fort ? 20 : 15, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: 0)),
       ],
     );
   }
@@ -804,140 +538,62 @@ class _DetailRow extends StatelessWidget {
 
 // ── Composants internes ────────────────────────────────────────────────────
 
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-
-  const _SectionHeader({required this.title, this.subtitle});
+class _Titre extends StatelessWidget {
+  final String text;
+  const _Titre(this.text);
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-              letterSpacing: -0.2,
-            ),
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 2),
-            Text(
-              subtitle!,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppTheme.textTertiary,
-                height: 1.3,
-              ),
-            ),
-          ],
-        ],
-      ),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text(text, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
     );
   }
 }
 
-class _FieldLabel extends StatelessWidget {
+class _Aide extends StatelessWidget {
   final String text;
-  const _FieldLabel(this.text);
+  const _Aide(this.text);
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: AppTheme.textSecondary,
-      ),
-    );
+    return Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.4));
   }
 }
 
-class _ColisChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ColisChip({required this.label, required this.selected, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.accent : AppTheme.background,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? AppTheme.accent : AppTheme.divider),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-            color: selected ? AppTheme.white : AppTheme.textSecondary,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PaymentOption extends StatelessWidget {
+class _Tuile extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
-  const _PaymentOption({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
+  const _Tuile({required this.icon, required this.label, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-        decoration: BoxDecoration(
-          color: selected ? AppTheme.accentLight : AppTheme.background,
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Material(
+        color: selected ? AppTheme.accentLight : AppTheme.cardBg,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          border: Border.all(
-            color: selected ? AppTheme.accent : AppTheme.divider,
-            width: 1.5,
-          ),
+          side: BorderSide(color: selected ? AppTheme.accent : AppTheme.divider, width: 2),
         ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              size: 28,
-              color: selected ? AppTheme.accentDark : AppTheme.textSecondary,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          child: SizedBox(
+            height: 72,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: selected ? AppTheme.accentDark : AppTheme.textPrimary),
+                const SizedBox(height: 4),
+                Text(label, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: selected ? AppTheme.accentDark : AppTheme.textPrimary)),
+              ],
             ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                color: selected ? AppTheme.accentDark : AppTheme.textPrimary,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -4,10 +4,10 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:mobile_core/mobile_core.dart';
 import '../../providers/credit_provider.dart';
 
-/// Commission moyenne indicative — sert à afficher « ≈ N commissions couvertes ».
+/// Commission moyenne indicative — sert à afficher « ≈ N courses couvertes ».
 const double _kCommissionMoyenne = 1680;
 
-/// Écran « Crédit » de l’expéditeur.
+/// Écran « Crédit » de l'expéditeur.
 ///
 /// Le Crédit se dépense (commission de chaque course) et se recharge via Mobile
 /// Money. Il ne se retire pas. La recharge est appliquée après confirmation du
@@ -44,202 +44,92 @@ class _CreditScreenState extends State<CreditScreen> with WidgetsBindingObserver
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.white,
-      body: SafeArea(
-        child: Consumer<CreditProvider>(
-          builder: (context, credit, _) {
-            if (credit.isLoading && credit.transactions.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (credit.error != null && credit.solde == 0 && credit.transactions.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Impossible de charger le Crédit',
-                        style: TextStyle(color: AppTheme.textSecondary)),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () => context.read<CreditProvider>().loadCredit(),
-                      child: const Text('Réessayer'),
-                    ),
-                  ],
+    final credit = context.watch<CreditProvider>();
+    final reload = context.read<CreditProvider>().loadCredit;
+    final rienAMontrer = credit.solde == 0 && credit.transactions.isEmpty;
+
+    Widget body;
+    if (rienAMontrer && credit.isLoading) {
+      body = const LoadingState(message: 'Chargement de votre Crédit');
+    } else if (rienAMontrer && !NetworkService().isOnline) {
+      body = OfflineState(onRetry: reload);
+    } else if (rienAMontrer && credit.error != null) {
+      body = ErrorState(message: 'Votre Crédit n\'a pas pu être chargé.', onRetry: reload);
+    } else {
+      final groupes = <(String, List<WalletTransaction>)>[];
+      for (final t in credit.transactions) {
+        final titre = DateFormatter.jour(t.createdAt).toUpperCase();
+        if (groupes.isEmpty || groupes.last.$1 != titre) {
+          groupes.add((titre, [t]));
+        } else {
+          groupes.last.$2.add(t);
+        }
+      }
+      body = RefreshIndicator(
+        onRefresh: reload,
+        color: AppTheme.accent,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          children: [
+            _CarteCredit(solde: credit.solde),
+            if (credit.transactions.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: EmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Aucun mouvement',
+                  message: 'Vos recharges et les commissions de vos courses apparaîtront ici.',
                 ),
-              );
-            }
-            final solde = credit.solde;
-            final nbCouvertes = (solde / _kCommissionMoyenne).floor();
-
-            return RefreshIndicator(
-              onRefresh: () => context.read<CreditProvider>().loadCredit(),
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Crédit',
-                              style: Theme.of(context).textTheme.headlineMedium),
-                          const SizedBox(height: 20),
-
-                          // ── Carte solde — claire, mono, orange sobre ─────────
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(22),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                                colors: [AppTheme.white, AppTheme.accentLight],
-                              ),
-                              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                              border: Border.all(color: AppTheme.accent.withValues(alpha: 0.18)),
-                              boxShadow: AppTheme.shadowSm,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'CRÉDIT',
-                                      style: AppTheme.mono(
-                                        size: 11,
-                                        weight: FontWeight.w700,
-                                        color: AppTheme.accentDark,
-                                        spacing: 1.8,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 7),
-                                    const _TwoDots(),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  AppCurrency.format(solde),
-                                  style: AppTheme.mono(
-                                    size: 32,
-                                    weight: FontWeight.w700,
-                                    color: AppTheme.textPrimary,
-                                    spacing: -1,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  nbCouvertes > 0
-                                      ? '≈ $nbCouvertes commissions couvertes'
-                                      : 'Rechargez pour créer des courses',
-                                  style: TextStyle(
-                                      color: AppTheme.textSecondary, fontSize: 13),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-
-                          // ── Action : Recharger (orange, seul) ────────────────
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: () => _showRechargeSheet(context),
-                              icon: const Icon(Icons.add_rounded, size: 20),
-                              label: const Text('Recharger'),
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 15),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 26),
-                          Text(
-                            'MOUVEMENTS',
-                            style: AppTheme.mono(
-                              size: 11,
-                              weight: FontWeight.w600,
-                              color: AppTheme.textTertiary,
-                              spacing: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                        ],
-                      ),
-                    ),
+              )
+            else
+              for (final g in groupes) ...[
+                const SizedBox(height: 24),
+                Text(g.$1, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecondary)),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  decoration: BoxDecoration(color: AppTheme.cardBg, borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < g.$2.length; i++) ...[
+                        if (i > 0) const Divider(height: 1),
+                        _CreditTile(txn: g.$2[i]),
+                      ],
+                    ],
                   ),
-
-                  // ── Liste des mouvements ─────────────────────────────────────
-                  if (credit.transactions.isEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 84,
-                              height: 84,
-                              decoration: BoxDecoration(
-                                color: AppTheme.white,
-                                borderRadius: BorderRadius.circular(26),
-                                border: Border.all(color: AppTheme.divider),
-                              ),
-                              child: Icon(Icons.receipt_long_outlined,
-                                  size: 38,
-                                  color: AppTheme.textTertiary.withValues(alpha: 0.7)),
-                            ),
-                            const SizedBox(height: 20),
-                            const Text('Aucun mouvement',
-                                style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.textPrimary,
-                                    letterSpacing: -0.2)),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Vos recharges et les commissions de vos courses apparaîtront ici.',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppTheme.textSecondary,
-                                  height: 1.5),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else ...[
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      sliver: SliverList.separated(
-                        itemCount: credit.transactions.length,
-                        separatorBuilder: (_, __) =>
-                            Divider(height: 1, color: AppTheme.divider),
-                        itemBuilder: (context, i) =>
-                            _CreditTile(txn: credit.transactions[i]),
-                      ),
+                ),
+              ],
+            if (credit.hasMore) ...[
+              const SizedBox(height: 16),
+              credit.isLoadingMore
+                  ? const SizedBox(height: 56, child: LoadingState())
+                  : SecondaryButton(
+                      label: 'Voir les mouvements plus anciens',
+                      onPressed: () => context.read<CreditProvider>().loadMore(),
                     ),
-                    if (credit.hasMore)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          child: credit.isLoadingMore
-                              ? const Center(child: CircularProgressIndicator())
-                              : TextButton(
-                                  onPressed: () =>
-                                      context.read<CreditProvider>().loadMore(),
-                                  child: const Text('Charger plus'),
-                                ),
-                        ),
-                      ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                  ],
-                ],
-              ),
-            );
-          },
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 24, 16, 16),
+              child: Text('Votre Crédit', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+            ),
+            Expanded(child: body),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+              child: PrimaryCta(label: 'Recharger mon Crédit', onPressed: () => _showRechargeSheet(context)),
+            ),
+          ],
         ),
       ),
     );
@@ -249,9 +139,7 @@ class _CreditScreenState extends State<CreditScreen> with WidgetsBindingObserver
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) => ChangeNotifierProvider.value(
         value: context.read<CreditProvider>(),
         child: const _RechargeSheet(),
@@ -260,28 +148,60 @@ class _CreditScreenState extends State<CreditScreen> with WidgetsBindingObserver
   }
 }
 
-// ── Motif deux-points (signature du logo) ────────────────────────────────────
+// ── Carte Crédit (chiffre héros) ─────────────────────────────────────────────
 
-class _TwoDots extends StatelessWidget {
-  const _TwoDots();
+class _CarteCredit extends StatelessWidget {
+  final double solde;
+  const _CarteCredit({required this.solde});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [_dot(), const SizedBox(width: 3), _dot()],
+    final nbCouvertes = (solde / _kCommissionMoyenne).floor();
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        boxShadow: AppTheme.shadowMd,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Text('Solde', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+              SizedBox(width: 8),
+              BrandDots(size: 4),
+            ],
+          ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(AppCurrency.format(solde),
+                style: AppTheme.mono(size: 40, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -1)),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            nbCouvertes > 0 ? '≈ $nbCouvertes courses couvertes' : 'Rechargez pour créer des courses',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              color: nbCouvertes > 0 ? AppTheme.textPrimary : AppTheme.accentDark,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Le Crédit couvre la commission Sönaiyaa (12 %) de chaque course. Elle vous est rendue si votre client paie la livraison ou si la course est annulée.',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.4),
+          ),
+        ],
+      ),
     );
   }
-
-  Widget _dot() => Container(
-        width: 4,
-        height: 4,
-        decoration:
-            const BoxDecoration(color: AppTheme.accent, shape: BoxShape.circle),
-      );
 }
 
-// ── Tuile mouvement de Crédit ────────────────────────────────────────────────
+// ── Mouvement de Crédit ──────────────────────────────────────────────────────
 
 class _CreditTile extends StatelessWidget {
   final WalletTransaction txn;
@@ -289,76 +209,61 @@ class _CreditTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOut = txn.type == 'commission';
-    final color = isOut ? AppTheme.textSecondary : AppTheme.success;
-    final sign = isOut ? '−' : '+';
-    final IconData icon = switch (txn.type) {
-      'recharge' => Icons.arrow_downward_rounded,
-      'commission' => Icons.storefront_outlined,
-      'remboursement' => Icons.undo_rounded,
-      'ajustement_admin' => Icons.tune_rounded,
-      _ => Icons.arrow_downward_rounded,
-    };
+    // Sorties : commission d'une course, indemnité versée au livreur.
+    final sortie = txn.type == 'commission' || txn.type == 'indemnite';
     final label = switch (txn.type) {
       'recharge' => txn.description ?? 'Recharge',
-      'commission' => txn.description ?? 'Commission course',
-      'remboursement' => txn.description ?? 'Remboursement',
+      'commission' => txn.description ?? 'Commission d\'une course',
+      'remboursement' => txn.description ?? 'Commission rendue',
+      'avoir' => txn.description ?? 'Avoir (paiement remboursé)',
+      'indemnite' => txn.description ?? 'Indemnité d\'annulation au livreur',
       'ajustement_admin' => txn.description ?? 'Ajustement',
       _ => txn.description ?? txn.type,
     };
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 64),
       child: Row(
         children: [
           Container(
             width: 40,
             height: 40,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(12),
+            decoration: BoxDecoration(color: sortie ? AppTheme.accentLight : AppTheme.successLight, shape: BoxShape.circle),
+            child: Icon(
+              sortie ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+              color: sortie ? AppTheme.accentDark : AppTheme.successDark,
+              size: 20,
             ),
-            child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Text(_formatDate(txn.createdAt),
-                    style:
-                        TextStyle(color: AppTheme.textTertiary, fontSize: 12)),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(DateFormatter.timeOnly(txn.createdAt),
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+                ],
+              ),
             ),
           ),
           Text(
-            '$sign ${AppCurrency.format(txn.montant)}',
-            style: AppTheme.mono(
-                size: 14, weight: FontWeight.w700, color: color, spacing: 0),
+            '${sortie ? '−' : '+'}${AppCurrency.format(txn.montant)}',
+            style: AppTheme.mono(size: 15, weight: FontWeight.w800, color: sortie ? AppTheme.textPrimary : AppTheme.successDark, spacing: 0),
           ),
         ],
       ),
     );
   }
-
-  String _formatDate(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inDays == 0) {
-      return "Aujourd'hui ${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}";
-    }
-    if (diff.inDays == 1) return 'Hier';
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-  }
 }
 
-// ── Sheet de recharge ────────────────────────────────────────────────────────
+// ── Feuille de recharge ──────────────────────────────────────────────────────
 
 class _RechargeSheet extends StatefulWidget {
   const _RechargeSheet();
@@ -369,7 +274,7 @@ class _RechargeSheet extends StatefulWidget {
 
 class _RechargeSheetState extends State<_RechargeSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _montantCtrl = TextEditingController();
+  final _montantCtrl = TextEditingController(text: '25000');
   bool _loading = false;
 
   @override
@@ -378,23 +283,22 @@ class _RechargeSheetState extends State<_RechargeSheet> {
     super.dispose();
   }
 
+  double? get _montant => double.tryParse(_montantCtrl.text.replaceAll(' ', '').replaceAll(',', '.'));
+
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_loading || !_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
-    final montant =
-        double.parse(_montantCtrl.text.replaceAll(' ', '').replaceAll(',', '.'));
     try {
-      final url = await context.read<CreditProvider>().rechargeCredit(montant);
+      final url = await context.read<CreditProvider>().rechargeCredit(_montant!);
       if (!mounted) return;
       setState(() => _loading = false);
       Navigator.pop(context);
       if (url != null && url.isNotEmpty) {
         await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
         if (!mounted) return;
-        UIUtils.showInfo(context,
-            'Finalisez le paiement — votre Crédit sera mis à jour après confirmation.');
+        UIUtils.showInfo(context, 'Finalisez le paiement : votre Crédit sera mis à jour après confirmation.');
       } else {
-        UIUtils.showError(context, 'Lien de paiement indisponible');
+        UIUtils.showError(context, 'Lien de paiement indisponible. Réessayez dans un instant.');
       }
     } catch (e) {
       if (!mounted) return;
@@ -405,108 +309,62 @@ class _RechargeSheetState extends State<_RechargeSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
-      ),
+    final montant = _montant;
+    return AppSheet(
       child: Form(
         key: _formKey,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppTheme.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text('Recharger le Crédit',
-                style: Theme.of(context).textTheme.titleLarge),
+            const Text('Recharger le Crédit', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
             const SizedBox(height: 4),
-            Text('Payez via Mobile Money. Votre Crédit couvre la commission de vos courses.',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-            const SizedBox(height: 18),
-            // Montants préréglés — recharge rapide (couvre ~6 / 15 / 30 / 60 courses).
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [10000, 25000, 50000, 100000].map((montant) {
-                final selected =
-                    _montantCtrl.text.replaceAll(' ', '') == montant.toString();
-                return GestureDetector(
-                  onTap: () => setState(
-                      () => _montantCtrl.text = montant.toString()),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: selected ? AppTheme.accentLight : AppTheme.background,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: selected ? AppTheme.accent : AppTheme.divider,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Text(
-                      AppCurrency.format(montant.toDouble()),
-                      style: AppTheme.mono(
-                        size: 13,
-                        weight: FontWeight.w700,
-                        color: selected ? AppTheme.accentDark : AppTheme.textSecondary,
-                        spacing: -0.3,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
+            const Text('Par Mobile Money · minimum 5 000 GNF',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+            const SizedBox(height: 20),
             TextFormField(
               controller: _montantCtrl,
               keyboardType: TextInputType.number,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Montant (GNF)',
-                prefixIcon: Icon(Icons.payments_outlined),
-              ),
+              style: AppTheme.mono(size: 32, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -0.5),
+              decoration: const InputDecoration(labelText: 'Montant', suffixText: 'GNF'),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Montant requis';
-                final m =
-                    double.tryParse(v.replaceAll(' ', '').replaceAll(',', '.'));
+                final m = _montant;
+                if (v == null || v.isEmpty) return 'Indiquez un montant';
                 if (m == null || m <= 0) return 'Montant invalide';
                 if (m < 5000) return 'Minimum 5 000 GNF';
                 return null;
               },
             ),
+            const SizedBox(height: 8),
+            // Montants préréglés — recharge rapide.
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [10000, 25000, 50000, 100000].map((m) {
+                final choisi = montant == m;
+                return ChoiceChip(
+                  label: Text(AppCurrency.format(m.toDouble())),
+                  selected: choisi,
+                  showCheckmark: false,
+                  onSelected: (_) => setState(() => _montantCtrl.text = m.toString()),
+                  labelStyle: AppTheme.mono(size: 13, weight: FontWeight.w800, color: choisi ? AppTheme.accentDark : AppTheme.textPrimary, spacing: 0),
+                  backgroundColor: AppTheme.cardBg,
+                  selectedColor: AppTheme.accentLight,
+                  side: BorderSide(color: choisi ? AppTheme.accent : AppTheme.divider, width: 2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusSm)),
+                );
+              }).toList(),
+            ),
+            if (montant != null && montant >= _kCommissionMoyenne) ...[
+              const SizedBox(height: 12),
+              Text('≈ ${(montant / _kCommissionMoyenne).floor()} courses couvertes',
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+            ],
             const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  ),
-                ),
-                child: _loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Payer'),
-              ),
+            PrimaryCta(
+              label: montant != null && montant > 0 ? 'Payer ${AppCurrency.format(montant)}' : 'Payer',
+              loading: _loading,
+              onPressed: _submit,
             ),
           ],
         ),

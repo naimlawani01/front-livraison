@@ -16,55 +16,41 @@ class ProfileScreen extends StatelessWidget {
     final expediteur = auth.expediteur;
 
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         child: RefreshIndicator(
-          color: AppTheme.black,
+          color: AppTheme.accent,
           onRefresh: () => auth.loadExpediteur(),
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           children: [
             const SizedBox(height: 28),
-            Text('Profil', style: Theme.of(context).textTheme.headlineMedium),
+            const Text('Profil', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
             const SizedBox(height: 28),
 
             // Avatar & Name
             Center(
               child: Column(
                 children: [
-                  Container(
-                    width: 88,
-                    height: 88,
-                    decoration: BoxDecoration(
-                      gradient: AppTheme.accentGradient,
-                      borderRadius: BorderRadius.circular(28),
-                      boxShadow: [BoxShadow(color: AppTheme.accent.withValues(alpha: 0.4), blurRadius: 24, offset: const Offset(0, 10))],
-                    ),
-                    child: Center(
-                      child: Text(
-                        expediteur?.nom.substring(0, 1).toUpperCase() ?? 'R',
-                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: AppTheme.white),
-                      ),
-                    ),
-                  ),
+                  UserAvatar(name: expediteur?.nom, size: 88),
                   const SizedBox(height: 16),
                   Text(
                     expediteur?.nom ?? 'Mon établissement',
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
                   ),
                   if (expediteur != null) ...[
                     const SizedBox(height: 6),
                     Text(
                       expediteur.adresse,
-                      style: const TextStyle(fontSize: 14, color: AppTheme.textSecondary, fontWeight: FontWeight.w400),
+                      style: const TextStyle(fontSize: 15, color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
                       textAlign: TextAlign.center,
                     ),
                   ],
                   const SizedBox(height: 6),
                   Text(
                     GuineaPhone.formatPretty(user?.phone),
-                    style: const TextStyle(fontSize: 14, color: AppTheme.textTertiary, fontWeight: FontWeight.w500),
+                    style: const TextStyle(fontSize: 15, color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
                   ),
 
                   if (expediteur?.isVerified == true) ...[
@@ -72,15 +58,15 @@ class ProfileScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: AppTheme.success.withValues(alpha: 0.12),
+                        color: AppTheme.successLight,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.verified_rounded, size: 15, color: AppTheme.success),
+                          const Icon(Icons.verified_rounded, size: 16, color: AppTheme.successDark),
                           const SizedBox(width: 5),
-                          Text('Vérifié', style: TextStyle(color: AppTheme.success, fontWeight: FontWeight.w700, fontSize: 12.5)),
+                          Text('Vérifié', style: TextStyle(color: AppTheme.successDark, fontWeight: FontWeight.w800, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -88,28 +74,17 @@ class ProfileScreen extends StatelessWidget {
 
                   if (expediteur != null) ...[
                     const SizedBox(height: 16),
-                    GestureDetector(
+                    InkWell(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       onTap: () async {
                         await Navigator.push(
                           context,
                           MaterialPageRoute(builder: (_) => EditProfileScreen(expediteur: expediteur)),
                         );
                       },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppTheme.background,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppTheme.divider),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.edit_outlined, size: 14, color: AppTheme.textSecondary),
-                            SizedBox(width: 8),
-                            Text('Modifier le profil', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
-                          ],
-                        ),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Text('Modifier le profil', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.accentDark)),
                       ),
                     ),
                   ],
@@ -123,7 +98,7 @@ class ProfileScreen extends StatelessWidget {
               const _SectionHeader(title: 'Établissement'),
               Container(
                 decoration: BoxDecoration(
-                  color: AppTheme.white,
+                  color: AppTheme.cardBg,
                   borderRadius: BorderRadius.circular(AppTheme.radiusLg),
                   border: Border.all(color: AppTheme.divider),
                   boxShadow: AppTheme.shadowSm,
@@ -131,8 +106,8 @@ class ProfileScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     _InfoRow(icon: Icons.location_on_outlined, title: 'Adresse', value: expediteur.adresse),
-                    if (expediteur.email != null) _InfoRow(icon: Icons.email_outlined, title: 'Email', value: expediteur.email!),
-                    if (expediteur.telephoneSecondaire != null) _InfoRow(icon: Icons.phone_outlined, title: 'Tel. secondaire', value: GuineaPhone.formatPretty(expediteur.telephoneSecondaire)),
+                    if (expediteur.email != null) _InfoRow(icon: Icons.email_outlined, title: 'E-mail', value: expediteur.email!),
+                    if (expediteur.telephoneSecondaire != null) _InfoRow(icon: Icons.phone_outlined, title: 'Téléphone secondaire', value: GuineaPhone.formatPretty(expediteur.telephoneSecondaire)),
                     _InfoRow(
                       icon: Icons.star_outline_rounded,
                       title: 'Note moyenne',
@@ -142,7 +117,7 @@ class ProfileScreen extends StatelessWidget {
                       icon: Icons.verified_outlined,
                       title: 'Statut',
                       value: expediteur.isVerified ? 'Vérifié' : 'En attente',
-                      valueColor: expediteur.isVerified ? AppTheme.success : AppTheme.warning,
+                      valueColor: expediteur.isVerified ? AppTheme.successDark : AppTheme.warningDark,
                       showDivider: false,
                     ),
                   ],
@@ -152,7 +127,7 @@ class ProfileScreen extends StatelessWidget {
             ],
 
             // Settings
-            const _SectionHeader(title: 'Réglages'),
+            const _SectionHeader(title: 'Compte et aide'),
             _SettingsCard(
               children: [
                 _SettingsTile(
@@ -160,12 +135,10 @@ class ProfileScreen extends StatelessWidget {
                   title: 'Mes documents',
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DocumentsScreen())),
                 ),
-                _SettingsTile(icon: Icons.language_outlined, title: 'Langue', value: 'Francais', onTap: () {}),
-                _SettingsTile(icon: Icons.notifications_outlined, title: 'Notifications', value: 'Activees', onTap: () {}),
-                _SettingsTile(icon: Icons.support_agent_outlined, title: 'Aide & Support', onTap: () {
+                _SettingsTile(icon: Icons.support_agent_outlined, title: 'Contacter le support', onTap: () {
                   launchUrl(Uri.parse('mailto:support@sonaiyaa.com?subject=Aide%20Sönaiyaa%20Expediteur'), mode: LaunchMode.externalApplication);
                 }),
-                _SettingsTile(icon: Icons.info_outline_rounded, title: 'A propos', value: AppVersion.short, onTap: () {}, showDivider: false),
+                _InfoRow(icon: Icons.info_outline_rounded, title: 'Version de l\'application', value: AppVersion.short, showDivider: false),
               ],
             ),
             const SizedBox(height: 20),
@@ -189,33 +162,16 @@ class ProfileScreen extends StatelessWidget {
             ),
             const SizedBox(height: 32),
 
-            // Logout
-            GestureDetector(
-              onTap: () => _showLogoutDialog(context, auth),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  color: AppTheme.errorLight,
-                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                ),
-                child: const Center(
-                  child: Text(
-                    'Se déconnecter',
-                    style: TextStyle(color: AppTheme.error, fontWeight: FontWeight.w600, fontSize: 14),
-                  ),
-                ),
-              ),
+            SecondaryButton(
+              label: 'Se déconnecter',
+              icon: Icons.logout_rounded,
+              onPressed: () => _confirmerDeconnexion(context, auth),
             ),
-            const SizedBox(height: 12),
-            GestureDetector(
-              onTap: () => _showDeleteAccountDialog(context, auth),
-              child: const Center(
-                child: Text(
-                  'Supprimer mon compte',
-                  style: TextStyle(color: AppTheme.textTertiary, fontWeight: FontWeight.w500, fontSize: 13, decoration: TextDecoration.underline),
-                ),
-              ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => _confirmerSuppression(context, auth),
+              style: TextButton.styleFrom(foregroundColor: AppTheme.error),
+              child: const Text('Supprimer mon compte'),
             ),
             const SizedBox(height: 60),
           ],
@@ -225,43 +181,26 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  void _showDeleteAccountDialog(BuildContext context, AuthProvider auth) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Supprimer le compte', style: TextStyle(fontWeight: FontWeight.w600)),
-        content: const Text('Toutes vos données personnelles seront supprimées. Cette action est irréversible.'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600))),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await auth.deleteAccount();
-            },
-            child: const Text('Supprimer', style: TextStyle(color: AppTheme.error, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
+  Future<void> _confirmerSuppression(BuildContext context, AuthProvider auth) async {
+    final ok = await showConfirmAction(
+      context,
+      icon: Icons.delete_outline_rounded,
+      title: 'Supprimer votre compte ?',
+      message: 'Toutes vos données personnelles seront supprimées. Cette action est définitive.',
+      confirmLabel: 'Supprimer mon compte',
     );
+    if (ok) await auth.deleteAccount();
   }
 
-  void _showLogoutDialog(BuildContext context, AuthProvider auth) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Deconnexion', style: TextStyle(fontWeight: FontWeight.w600)),
-        content: const Text('Voulez-vous vraiment vous deconnecter ?'),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Annuler', style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600))),
-          TextButton(
-            onPressed: () { auth.logout(); Navigator.pop(ctx); },
-            child: const Text('Se déconnecter', style: TextStyle(color: AppTheme.error, fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
+  Future<void> _confirmerDeconnexion(BuildContext context, AuthProvider auth) async {
+    final ok = await showConfirmAction(
+      context,
+      icon: Icons.logout_rounded,
+      title: 'Se déconnecter ?',
+      message: 'Vos courses en cours continuent ; vous les retrouverez à la reconnexion.',
+      confirmLabel: 'Se déconnecter',
     );
+    if (ok) auth.logout();
   }
 }
 
@@ -273,7 +212,7 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(left: 2, bottom: 12),
-      child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+      child: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
     );
   }
 }
@@ -286,7 +225,7 @@ class _SettingsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.white,
+        color: AppTheme.cardBg,
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppTheme.divider),
         boxShadow: AppTheme.shadowSm,
@@ -322,9 +261,9 @@ class _InfoRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppTheme.textTertiary)),
+                    Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
                     const SizedBox(height: 2),
-                    Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: valueColor ?? AppTheme.textPrimary)),
+                    Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: valueColor ?? AppTheme.textPrimary)),
                   ],
                 ),
               ),
@@ -340,10 +279,9 @@ class _InfoRow extends StatelessWidget {
 class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String? value;
   final VoidCallback onTap;
   final bool showDivider;
-  const _SettingsTile({required this.icon, required this.title, this.value, required this.onTap, this.showDivider = true});
+  const _SettingsTile({required this.icon, required this.title, required this.onTap, this.showDivider = true});
 
   @override
   Widget build(BuildContext context) {
@@ -353,7 +291,7 @@ class _SettingsTile extends StatelessWidget {
           onTap: onTap,
           borderRadius: BorderRadius.circular(AppTheme.radiusLg),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
                 Container(
@@ -362,12 +300,8 @@ class _SettingsTile extends StatelessWidget {
                   child: Icon(icon, size: 18, color: AppTheme.textSecondary),
                 ),
                 const SizedBox(width: 14),
-                Expanded(child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textPrimary))),
-                if (value != null) ...[
-                  Text(value!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppTheme.textTertiary)),
-                  const SizedBox(width: 8),
-                ],
-                const Icon(Icons.chevron_right_rounded, size: 20, color: AppTheme.textTertiary),
+                Expanded(child: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppTheme.textPrimary))),
+                const Icon(Icons.chevron_right_rounded, size: 20, color: AppTheme.textSecondary),
               ],
             ),
           ),

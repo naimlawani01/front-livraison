@@ -104,7 +104,7 @@ class _LivreurMapWidgetState extends State<LivreurMapWidget> {
       Polyline(
         polylineId: const PolylineId('trajet'),
         points: points,
-        color: AppTheme.accent.withOpacity(0.6),
+        color: AppTheme.accent.withValues(alpha: 0.6),
         width: 3,
         patterns: [PatternItem.dash(12), PatternItem.gap(8)],
       ),
@@ -199,7 +199,7 @@ class _LivreurMapWidgetState extends State<LivreurMapWidget> {
       return Container(
         height: 280,
         decoration: BoxDecoration(
-          color: AppTheme.background,
+          color: AppTheme.cardBg,
           borderRadius: BorderRadius.circular(AppTheme.radiusLg),
           border: Border.all(color: AppTheme.divider),
         ),
@@ -207,14 +207,14 @@ class _LivreurMapWidgetState extends State<LivreurMapWidget> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.location_off_rounded, size: 32, color: AppTheme.textTertiary),
+              Icon(Icons.location_off_rounded, size: 32, color: AppTheme.textSecondary),
               SizedBox(height: 8),
               Text(
                 'Position du livreur indisponible',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 15,
                   color: AppTheme.textSecondary,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
