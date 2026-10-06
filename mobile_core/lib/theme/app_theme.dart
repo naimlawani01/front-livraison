@@ -39,6 +39,14 @@ class AppTheme {
     end: Alignment.bottomRight,
   );
 
+  // Dégradé du bouton d'action principal : plus foncé que accentGradient pour
+  // garder un texte blanc lisible au soleil (contraste renforcé côté sombre).
+  static const LinearGradient ctaGradient = LinearGradient(
+    colors: [accent, accentDark],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   // ── Shadows (vraie profondeur) ───────────────────────────────
   // Ombres douces et chaudes (spread négatif = halo discret sous la carte, pas un drop lourd).
   static const Color _shadowColor = Color(0xFF2A1E12);

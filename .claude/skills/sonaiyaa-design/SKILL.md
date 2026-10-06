@@ -33,6 +33,8 @@ dans un écran : si un token manque, on l'ajoute à `AppTheme`.
 - **Montants** : toujours `AppTheme.mono(...)` (chiffres tabulaires) et `AppCurrency.format(...)`.
   La **valeur** est plus grande que son étiquette (« 8 800 GNF » > « Vos gains »).
 - **Espacements** : multiples de 4 (4, 8, 12, 16, 20, 24, 32). Écart entre groupes = 2× l'écart interne.
+- **Bouton principal** : widget `PrimaryCta` (`mobile_core/lib/widgets/primary_cta.dart`, 64 px,
+  `ctaGradient`, état « en cours » anti double appui). Ne pas en recréer un à la main.
 - **Dégradé accent** (`accentGradient`) : réservé à **un seul** élément héros par écran
   (carte Gains, CTA principal). Deux dégradés sur un écran = trop.
 

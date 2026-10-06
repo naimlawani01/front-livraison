@@ -18,6 +18,10 @@ class CoursesDisponiblesScreen extends StatefulWidget {
 class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
     with WidgetsBindingObserver {
   Timer? _autoRefreshTimer;
+  // Course mise en avant (carte détaillée + bouton « Accepter » en bas).
+  // Par défaut la première de la liste ; reste choisie tant qu'elle existe.
+  String? _selectedId;
+  bool _accepting = false;
 
   @override
   void initState() {
@@ -73,9 +77,11 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
     final courses = context.watch<CourseProvider>();
     final loc = context.watch<LocationProvider>();
     final list = courses.coursesDisponibles;
+    final selected = list.where((c) => c.id == _selectedId).firstOrNull ?? list.firstOrNull;
+    final full = _isFull(courses);
 
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,7 +91,7 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
               padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
               child: Row(
                 children: [
-                  Expanded(child: Text('Disponibles', style: Theme.of(context).textTheme.headlineMedium)),
+                  Expanded(child: Text('Courses près de vous', style: Theme.of(context).textTheme.headlineMedium)),
                   // Bouton refresh manuel
                   IconButton(
                     onPressed: _load,
@@ -173,17 +179,27 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
                             children: [_EmptyState(gpsOn: loc.isTracking)],
                           )
                         : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 40),
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                             itemCount: list.length,
                             separatorBuilder: (_, __) => const SizedBox(height: 12),
-                            itemBuilder: (_, i) => _CourseCard(
-                              course: list[i],
-                              onAccept: () => _accept(list[i]),
-                              canAccept: !_isFull(courses),
-                            ),
+                            itemBuilder: (_, i) => list[i].id == selected?.id
+                                ? _CourseCard(course: list[i])
+                                : _CourseRow(
+                                    course: list[i],
+                                    onTap: () => setState(() => _selectedId = list[i].id),
+                                  ),
                           ),
               ),
             ),
+            if (selected != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: PrimaryCta(
+                  label: full ? 'Terminez une course en cours' : 'Accepter la course',
+                  loading: _accepting,
+                  onPressed: full ? null : () => _accept(selected),
+                ),
+              ),
           ],
         ),
       ),
@@ -193,7 +209,7 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
   Widget _buildBlockedScreen(BuildContext context, {required bool verified}) {
     final isOffline = verified;
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -267,9 +283,12 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
   bool _isFull(CourseProvider provider) => _activeCount(provider) >= _maxCourses;
 
   Future<void> _accept(Course course) async {
+    if (_accepting) return;
+    setState(() => _accepting = true);
     final provider = context.read<CourseProvider>();
     final ok = await provider.accepterCourse(course.id);
     if (!mounted) return;
+    setState(() => _accepting = false);
 
     if (ok) {
       HapticFeedback.mediumImpact();
@@ -298,206 +317,114 @@ class _CoursesDisponiblesScreenState extends State<CoursesDisponiblesScreen>
 }
 
 // ──────────────────────────────────────────────────────
-// COURSE CARD — Style Uber, avec décomposition financière
+// COURSE CARD (direction A « chiffre héros ») — la course sélectionnée.
+// Les gains en très grand, distance/durée/paiement en pastilles, trajet
+// Expéditeur → Client en deux points reliés. L'action est le bouton du bas.
 // ──────────────────────────────────────────────────────
 class _CourseCard extends StatelessWidget {
   final Course course;
-  final VoidCallback onAccept;
-  final bool canAccept;
-  const _CourseCard({required this.course, required this.onAccept, this.canAccept = true});
-
-  bool get _isCash => course.modePaiement.toUpperCase() == 'CASH';
+  const _CourseCard({required this.course});
 
   @override
   Widget build(BuildContext context) {
+    final cash = course.montantCashARecuperer;
     return Container(
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.white,
+        color: AppTheme.cardBg,
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        border: Border.all(color: AppTheme.accent, width: 2),
         boxShadow: AppTheme.shadowMd,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── Header : Gain livreur + badge paiement + distance livreur ──
+          const Text('Vos gains', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              AppCurrency.format(course.montantLivreur),
+              style: AppTheme.mono(size: 40, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -1),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (course.distanceKm != null) _Pill(label: '${course.distanceKm!.toStringAsFixed(1).replaceAll('.', ',')} km'),
+              if (course.dureeEstimeeMinutes != null) _Pill(label: '≈ ${course.dureeEstimeeMinutes} min'),
+              _Pill(label: course.isMobileMoney ? 'Mobile Money' : 'Espèces', accent: true),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _Trajet(course: course),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.accentLight,
+              borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+            ),
+            child: Text(
+              cash > 0
+                  ? 'Récupérez ${AppCurrency.format(cash)} en espèces auprès de l\'expéditeur'
+                  : 'Payée par Mobile Money : vos gains sont crédités à la livraison',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.accentDark, height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Trajet extends StatelessWidget {
+  final Course course;
+  const _Trajet({required this.course});
+
+  @override
+  Widget build(BuildContext context) {
+    final distance = course.distanceLivreurKm;
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Column(
+              children: [
+                Container(width: 12, height: 12, decoration: const BoxDecoration(color: AppTheme.accent, shape: BoxShape.circle)),
+                Expanded(child: Container(width: 2, margin: const EdgeInsets.symmetric(vertical: 4), color: AppTheme.divider)),
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppTheme.textPrimary, width: 3)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Vous gagnez',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textTertiary,
-                              letterSpacing: 0.4,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            AppCurrency.format(course.montantLivreur),
-                            style: AppTheme.mono(
-                              size: 26,
-                              weight: FontWeight.w800,
-                              color: AppTheme.textPrimary,
-                              spacing: -0.8,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _PaymentBadge(isCash: _isCash),
-                  ],
+                _Lieu(
+                  label: distance != null
+                      ? 'Récupération · Expéditeur · à ${distance.toStringAsFixed(1).replaceAll('.', ',')} km'
+                      : 'Récupération · Expéditeur',
+                  titre: course.expediteurNom ?? 'Expéditeur',
+                  detail: course.expediteurAdresse,
                 ),
-                if (course.distanceLivreurKm != null) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'À ${course.distanceLivreurKm!.toStringAsFixed(1)} km de vous',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.accent,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          // ── Path Indicator ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Column(
-                  children: [
-                    Container(width: 10, height: 10, decoration: const BoxDecoration(color: AppTheme.black, shape: BoxShape.circle)),
-                    Container(width: 2, height: 30, color: AppTheme.divider),
-                    Container(width: 10, height: 10, decoration: BoxDecoration(color: AppTheme.white, shape: BoxShape.circle, border: Border.all(color: AppTheme.black, width: 2))),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _LocationInfo(
-                        title: course.expediteurNom ?? 'EXPEDITEUR',
-                        subtitle: course.expediteurAdresse ?? 'Adresse indisponible',
-                        isBold: true,
-                      ),
-                      const SizedBox(height: 18),
-                      _LocationInfo(
-                        title: course.contactClientNom.toUpperCase(),
-                        // Données du client masquées avant acceptation (backend) :
-                        // adresse, téléphone et consignes visibles une fois acceptée.
-                        subtitle: course.adresseClient ?? 'Adresse visible après acceptation',
-                        isBold: true,
-                      ),
-                      if (course.descriptionColis != null && course.descriptionColis!.isNotEmpty) ...[
-                        const SizedBox(height: 14),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Icon(Icons.inventory_2_outlined, size: 16, color: AppTheme.textTertiary),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                course.descriptionColis!,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppTheme.textPrimary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // ── Décomposition financière ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppTheme.background,
-                borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-              ),
-              child: Row(
-                children: [
-                  _FinancialMini(
-                    label: 'Course',
-                    value: AppCurrency.format(course.prixPropose),
-                  ),
-                  Container(width: 1, height: 28, color: AppTheme.divider),
-                  _FinancialMini(
-                    label: 'Commission',
-                    value: '−${AppCurrency.format(course.commissionPlateforme)}',
-                    valueColor: AppTheme.textSecondary,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-          const Divider(height: 1),
-
-          // ── Footer : Distance/Durée + bouton ──
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                if (course.distanceKm != null)
-                  _MiniStat(icon: Icons.route_rounded, label: '${course.distanceKm!.toStringAsFixed(1)} KM'),
-                const SizedBox(width: 16),
-                if (course.dureeEstimeeMinutes != null)
-                  _MiniStat(icon: Icons.timer_outlined, label: '${course.dureeEstimeeMinutes} MIN'),
-                const Spacer(),
-                GestureDetector(
-                  onTap: canAccept ? onAccept : null,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                    decoration: BoxDecoration(
-                      gradient: canAccept ? AppTheme.accentGradient : null,
-                      color: canAccept ? null : AppTheme.divider,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: canAccept
-                          ? [
-                              BoxShadow(
-                                color: AppTheme.accent.withValues(alpha: 0.3),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              )
-                            ]
-                          : [],
-                    ),
-                    child: Text(
-                      canAccept ? 'Accepter' : 'Max atteint',
-                      style: TextStyle(
-                        color: canAccept ? AppTheme.white : AppTheme.textTertiary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ),
+                const SizedBox(height: 16),
+                // Données client masquées avant acceptation (backend) : prénom
+                // seul, adresse/téléphone/consignes visibles une fois acceptée.
+                _Lieu(
+                  label: 'Livraison · Client',
+                  titre: course.contactClientNom,
+                  detail: course.adresseClient ?? 'Adresse exacte visible après acceptation',
                 ),
               ],
             ),
@@ -508,120 +435,96 @@ class _CourseCard extends StatelessWidget {
   }
 }
 
-// ── Badge mode de paiement ────────────────────────────────────────────────
-class _PaymentBadge extends StatelessWidget {
-  final bool isCash;
-  const _PaymentBadge({required this.isCash});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isCash ? AppTheme.warning : AppTheme.success;
-    final bg = isCash ? AppTheme.warningLight : AppTheme.successLight;
-    final icon = isCash ? Icons.payments_outlined : Icons.phone_android_rounded;
-    final label = isCash ? 'Espèces' : 'Mobile Money';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FinancialMini extends StatelessWidget {
+class _Lieu extends StatelessWidget {
   final String label;
-  final String value;
-  final Color? valueColor;
-
-  const _FinancialMini({
-    required this.label,
-    required this.value,
-    this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textTertiary,
-                letterSpacing: 0.3,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: AppTheme.mono(
-                size: 13,
-                weight: FontWeight.w700,
-                color: valueColor ?? AppTheme.textPrimary,
-                spacing: 0,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _LocationInfo extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final bool isBold;
-  const _LocationInfo({required this.title, required this.subtitle, this.isBold = false});
+  final String titre;
+  final String? detail;
+  const _Lieu({required this.label, required this.titre, this.detail});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: TextStyle(fontSize: 12, fontWeight: isBold ? FontWeight.w600 : FontWeight.w500, color: AppTheme.textPrimary)),
-        const SizedBox(height: 2),
-        Text(subtitle, style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary, height: 1.2), maxLines: 1, overflow: TextOverflow.ellipsis),
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+        const SizedBox(height: 4),
+        Text(titre, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary), maxLines: 1, overflow: TextOverflow.ellipsis),
+        if (detail != null && detail!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(detail!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis),
+        ],
       ],
     );
   }
 }
 
-class _MiniStat extends StatelessWidget {
-  final IconData icon;
+class _Pill extends StatelessWidget {
   final String label;
-  const _MiniStat({required this.icon, required this.label});
+  final bool accent;
+  const _Pill({required this.label, this.accent = false});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: AppTheme.textTertiary),
-        const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppTheme.textTertiary)),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: accent ? AppTheme.accentLight : AppTheme.background,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+      ),
+      child: Text(
+        label,
+        style: AppTheme.mono(size: 15, weight: FontWeight.w800, color: accent ? AppTheme.accentDark : AppTheme.textPrimary, spacing: 0),
+      ),
+    );
+  }
+}
+
+// Autre course disponible, en ligne compacte : toucher pour la mettre en avant.
+class _CourseRow extends StatelessWidget {
+  final Course course;
+  final VoidCallback onTap;
+  const _CourseRow({required this.course, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final details = [
+      if (course.distanceKm != null) '${course.distanceKm!.toStringAsFixed(1).replaceAll('.', ',')} km',
+      if (course.expediteurNom != null) course.expediteurNom!,
+      course.isMobileMoney ? 'Mobile Money' : 'Espèces',
+    ].join(' · ');
+    return Material(
+      color: AppTheme.cardBg,
+      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 72),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+            boxShadow: AppTheme.shadowSm,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      AppCurrency.format(course.montantLivreur),
+                      style: AppTheme.mono(size: 20, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -0.3),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(details, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary), maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppTheme.textSecondary),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
