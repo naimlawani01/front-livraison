@@ -16,8 +16,10 @@ class AppTheme {
 
   static const Color success      = Color(0xFF12A06B); // vert fintech
   static const Color successLight = Color(0xFFECFDF5);
+  static const Color successDark  = Color(0xFF0B7A51); // texte vert lisible sur successLight
   static const Color warning      = Color(0xFFF59E0B);
   static const Color warningLight = Color(0xFFFFFBEB);
+  static const Color warningDark  = Color(0xFFB45309); // texte « en cours » lisible sur fond clair
   static const Color error        = Color(0xFFDC2626);
   static const Color errorLight   = Color(0xFFFEF2F2);
   static const Color info         = Color(0xFF3B82F6);
@@ -236,17 +238,17 @@ class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        height: 68,
+        height: 72,
         iconTheme: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
-          return IconThemeData(color: selected ? accentDark : textTertiary, size: 24);
+          return IconThemeData(color: selected ? accentDark : textSecondary, size: 24);
         }),
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           final selected = states.contains(WidgetState.selected);
           return GoogleFonts.manrope(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: selected ? accentDark : textTertiary,
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+            color: selected ? accentDark : textSecondary,
           );
         }),
       ),

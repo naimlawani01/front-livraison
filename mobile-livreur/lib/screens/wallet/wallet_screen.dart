@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile_core/mobile_core.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/wallet_provider.dart';
 
-/// Écran « Mes Gains » du livreur.
+/// Écran « Vos gains » du livreur.
 ///
 /// Nouveau modèle : les Gains ne font que monter (courses réglées via la
 /// plateforme + indemnités) et se retirent. Plus de recharge, plus de dette —
@@ -14,6 +15,8 @@ class WalletScreen extends StatefulWidget {
   @override
   State<WalletScreen> createState() => _WalletScreenState();
 }
+
+const double _retraitMinimum = 5000;
 
 class _WalletScreenState extends State<WalletScreen> with WidgetsBindingObserver {
   @override
@@ -40,228 +43,88 @@ class _WalletScreenState extends State<WalletScreen> with WidgetsBindingObserver
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppTheme.white,
-      body: SafeArea(
-        child: Consumer<WalletProvider>(
-          builder: (context, wallet, _) {
-            if (wallet.isLoading) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (wallet.error != null && wallet.summary == null) {
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Impossible de charger vos gains',
-                        style: TextStyle(color: AppTheme.textSecondary)),
-                    const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () => context.read<WalletProvider>().loadWallet(),
-                      child: const Text('Réessayer'),
-                    ),
-                  ],
-                ),
-              );
-            }
-            final summary = wallet.summary;
-            final solde = summary?.soldeDisponible ?? 0;
-            final peutRetirer = solde >= 5000;
+    final wallet = context.watch<WalletProvider>();
+    final summary = wallet.summary;
+    final solde = summary?.soldeDisponible ?? 0;
+    final reload = context.read<WalletProvider>().loadWallet;
 
-            return RefreshIndicator(
-              onRefresh: () => context.read<WalletProvider>().loadWallet(),
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Mes Gains',
-                              style: Theme.of(context).textTheme.headlineMedium),
-                          const SizedBox(height: 20),
-
-                          // ── Carte solde — claire, chiffres mono, orange sobre ──
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(22),
-                            decoration: BoxDecoration(
-                              color: AppTheme.cardBg,
-                              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-                              border: Border.all(color: AppTheme.divider),
-                              boxShadow: AppTheme.shadowSm,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Text(
-                                      'GAINS À RETIRER',
-                                      style: AppTheme.mono(
-                                        size: 11,
-                                        weight: FontWeight.w700,
-                                        color: AppTheme.accentDark,
-                                        spacing: 1.5,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 7),
-                                    const _TwoDots(),
-                                  ],
-                                ),
-                                const SizedBox(height: 10),
-                                Text(
-                                  AppCurrency.format(solde),
-                                  style: AppTheme.mono(
-                                    size: 32,
-                                    weight: FontWeight.w700,
-                                    color: AppTheme.textPrimary,
-                                    spacing: -1,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Sur la plateforme · retirable',
-                                  style: TextStyle(
-                                      color: AppTheme.textSecondary, fontSize: 13),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // ── Deux stats secondaires ───────────────────────────
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _StatCard(
-                                  label: 'Total gagné',
-                                  value: AppCurrency.format(summary?.totalGains ?? 0),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _StatCard(
-                                  label: 'Courses',
-                                  value: '${summary?.nombreCourses ?? 0}',
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-
-                          // ── Action : Retirer (orange, seul) ──────────────────
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed:
-                                  peutRetirer ? () => _showRetraitSheet(context) : null,
-                              icon: const Icon(Icons.arrow_upward_rounded, size: 18),
-                              label: const Text('Retirer'),
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 15),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(AppTheme.radiusMd),
-                                ),
-                              ),
-                            ),
-                          ),
-                          if (!peutRetirer) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              'Minimum 5 000 GNF pour un retrait',
-                              style: TextStyle(
-                                  color: AppTheme.textSecondary, fontSize: 12),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                          const SizedBox(height: 26),
-                          Text(
-                            'MOUVEMENTS',
-                            style: AppTheme.mono(
-                              size: 11,
-                              weight: FontWeight.w600,
-                              color: AppTheme.textTertiary,
-                              spacing: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                        ],
-                      ),
-                    ),
+    Widget body;
+    if (summary == null) {
+      // Rien à montrer encore : un des 3 états d'attente.
+      if (wallet.isLoading) {
+        body = const LoadingState(message: 'Chargement de vos gains');
+      } else if (!NetworkService().isOnline) {
+        body = OfflineState(onRetry: reload);
+      } else {
+        body = ErrorState(message: wallet.error, onRetry: reload);
+      }
+    } else {
+      body = RefreshIndicator(
+        onRefresh: reload,
+        color: AppTheme.accent,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+              sliver: SliverToBoxAdapter(child: _CarteGains(summary: summary)),
+            ),
+            if (wallet.transactions.isEmpty)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: EmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Aucun mouvement',
+                    message: 'Vos gains Mobile Money, indemnités et retraits apparaîtront ici.',
                   ),
-
-                  // ── Liste des mouvements ─────────────────────────────────────
-                  if (wallet.transactions.isEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 84,
-                              height: 84,
-                              decoration: BoxDecoration(
-                                color: AppTheme.white,
-                                borderRadius: BorderRadius.circular(26),
-                                border: Border.all(color: AppTheme.divider),
-                              ),
-                              child: Icon(Icons.receipt_long_outlined,
-                                  size: 38,
-                                  color: AppTheme.textTertiary.withValues(alpha: 0.7)),
-                            ),
-                            const SizedBox(height: 20),
-                            const Text('Aucun mouvement',
-                                style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppTheme.textPrimary,
-                                    letterSpacing: -0.2)),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Vos gains sur les courses Mobile Money et vos retraits apparaîtront ici.',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: AppTheme.textSecondary,
-                                  height: 1.5),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else ...[
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      sliver: SliverList.separated(
-                        itemCount: wallet.transactions.length,
-                        separatorBuilder: (_, __) =>
-                            Divider(height: 1, color: AppTheme.divider),
-                        itemBuilder: (context, i) =>
-                            _TransactionTile(txn: wallet.transactions[i]),
-                      ),
-                    ),
-                    if (wallet.hasMore)
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          child: wallet.isLoadingMore
-                              ? const Center(child: CircularProgressIndicator())
-                              : TextButton(
-                                  onPressed: () =>
-                                      context.read<WalletProvider>().loadMore(),
-                                  child: const Text('Charger plus'),
-                                ),
-                        ),
-                      ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                  ],
-                ],
+                ),
+              )
+            else
+              ..._groupesParJour(wallet.transactions).map(
+                (g) => SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                  sliver: SliverToBoxAdapter(child: _GroupeJour(titre: g.$1, txns: g.$2)),
+                ),
               ),
-            );
-          },
+            if (wallet.hasMore)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: wallet.isLoadingMore
+                      ? const SizedBox(height: 56, child: LoadingState())
+                      : SecondaryButton(
+                          label: 'Voir les mouvements plus anciens',
+                          onPressed: () => context.read<WalletProvider>().loadMore(),
+                        ),
+                ),
+              ),
+            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+          ],
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 24, 16, 16),
+              child: Text('Vos gains', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+            ),
+            Expanded(child: body),
+            if (summary != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                child: PrimaryCta(
+                  label: solde >= _retraitMinimum ? 'Retirer mes gains' : 'Retrait possible dès 5 000 GNF',
+                  onPressed: solde >= _retraitMinimum ? () => _showRetraitSheet(context) : null,
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -271,73 +134,137 @@ class _WalletScreenState extends State<WalletScreen> with WidgetsBindingObserver
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => ChangeNotifierProvider.value(
-        value: context.read<WalletProvider>(),
+      backgroundColor: Colors.transparent,
+      builder: (_) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: context.read<WalletProvider>()),
+          ChangeNotifierProvider.value(value: context.read<AuthProvider>()),
+        ],
         child: const _RetraitSheet(),
       ),
     );
   }
-}
 
-// ── Motif deux-points (signature du logo) ────────────────────────────────────
-
-class _TwoDots extends StatelessWidget {
-  const _TwoDots();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [_dot(), const SizedBox(width: 3), _dot()],
-    );
+  /// Regroupe les mouvements par jour (« Aujourd'hui », « Hier », date).
+  List<(String, List<WalletTransaction>)> _groupesParJour(List<WalletTransaction> txns) {
+    final groupes = <(String, List<WalletTransaction>)>[];
+    for (final t in txns) {
+      final titre = DateFormatter.jour(t.createdAt).toUpperCase();
+      if (groupes.isEmpty || groupes.last.$1 != titre) {
+        groupes.add((titre, [t]));
+      } else {
+        groupes.last.$2.add(t);
+      }
+    }
+    return groupes;
   }
-
-  Widget _dot() => Container(
-        width: 4,
-        height: 4,
-        decoration:
-            const BoxDecoration(color: AppTheme.accent, shape: BoxShape.circle),
-      );
 }
 
-// ── Stat secondaire ──────────────────────────────────────────────────────────
+// ── Carte « Gains à retirer » (chiffre héros) ───────────────────────────────
 
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  const _StatCard({required this.label, required this.value});
+class _CarteGains extends StatelessWidget {
+  final WalletSummary summary;
+  const _CarteGains({required this.summary});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.background,
-        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+        color: AppTheme.cardBg,
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+        boxShadow: AppTheme.shadowMd,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: AppTheme.mono(
-                size: 16, weight: FontWeight.w700, color: AppTheme.textPrimary),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          const Row(
+            children: [
+              Text('Gains à retirer', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+              SizedBox(width: 8),
+              BrandDots(size: 4),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(label,
-              style: TextStyle(fontSize: 11, color: AppTheme.textTertiary)),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              AppCurrency.format(summary.soldeDisponible),
+              style: AppTheme.mono(size: 40, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -1),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Courses payées en Mobile Money et indemnités. Les courses en espèces vous sont payées directement par l\'expéditeur.',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary, height: 1.4),
+          ),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _Stat(label: 'Total gagné', valeur: AppCurrency.format(summary.totalGains))),
+              Expanded(child: _Stat(label: 'Courses livrées', valeur: '${summary.nombreCourses}')),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
-// ── Tuile mouvement ──────────────────────────────────────────────────────────
+class _Stat extends StatelessWidget {
+  final String label;
+  final String valeur;
+  const _Stat({required this.label, required this.valeur});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+        const SizedBox(height: 4),
+        Text(valeur, style: AppTheme.mono(size: 15, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: 0)),
+      ],
+    );
+  }
+}
+
+// ── Mouvements groupés par jour ──────────────────────────────────────────────
+
+class _GroupeJour extends StatelessWidget {
+  final String titre;
+  final List<WalletTransaction> txns;
+  const _GroupeJour({required this.titre, required this.txns});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(titre, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppTheme.textSecondary)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: AppTheme.cardBg,
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+          ),
+          child: Column(
+            children: [
+              for (var i = 0; i < txns.length; i++) ...[
+                if (i > 0) const Divider(height: 1),
+                _TransactionTile(txn: txns[i]),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _TransactionTile extends StatelessWidget {
   final WalletTransaction txn;
@@ -345,103 +272,74 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isIn = txn.type != 'retrait';
-    final color = isIn ? AppTheme.success : AppTheme.textSecondary;
-    final sign = isIn ? '+' : '−';
-    final IconData icon = switch (txn.type) {
-      'retrait' => Icons.arrow_upward_rounded,
-      'bonus' => Icons.card_giftcard_rounded,
-      'indemnite' => Icons.shield_moon_outlined,
-      _ => Icons.arrow_downward_rounded,
-    };
+    final entree = txn.type != 'retrait';
     final label = switch (txn.type) {
       'credit' => txn.description ?? 'Course',
       'retrait' => txn.description ?? 'Retrait',
       'bonus' => txn.description ?? 'Bonus',
-      'indemnite' => txn.description ?? 'Indemnité',
+      'indemnite' => txn.description ?? 'Indemnité d\'annulation',
       _ => txn.description ?? txn.type,
     };
-    final statutColor = switch (txn.statut) {
-      'en_attente' || 'en_cours' => AppTheme.warning,
-      'refuse' => AppTheme.error,
-      _ => null,
+    final heure = DateFormatter.timeOnly(txn.createdAt);
+    final (String? statut, Color? statutCouleur) = switch (txn.statut) {
+      'en_attente' || 'en_cours' => ('En cours', AppTheme.warningDark),
+      'refuse' => ('Refusé', AppTheme.error),
+      _ => (null, null),
     };
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 64),
       child: Row(
         children: [
           Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: (isIn ? AppTheme.success : AppTheme.textSecondary)
-                  .withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(12),
+              color: entree ? AppTheme.successLight : AppTheme.accentLight,
+              shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(
+              entree ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              color: entree ? AppTheme.successDark : AppTheme.accentDark,
+              size: 20,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Text(_formatDate(txn.createdAt),
-                        style: TextStyle(
-                            color: AppTheme.textTertiary, fontSize: 12)),
-                    if (statutColor != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 1),
-                        decoration: BoxDecoration(
-                          color: statutColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          txn.statut == 'refuse' ? 'Refusé' : 'En cours',
-                          style: TextStyle(
-                              color: statutColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(
+                    statut == null ? heure : '$heure · $statut',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: statutCouleur ?? AppTheme.textSecondary),
+                  ),
+                ],
+              ),
             ),
           ),
           Text(
-            '$sign ${AppCurrency.format(txn.montant)}',
+            '${entree ? '+' : '−'}${AppCurrency.format(txn.montant)}',
             style: AppTheme.mono(
-                size: 14, weight: FontWeight.w700, color: color, spacing: 0),
+              size: 15,
+              weight: FontWeight.w800,
+              color: entree ? AppTheme.successDark : AppTheme.textPrimary,
+              spacing: 0,
+            ),
           ),
         ],
       ),
     );
   }
-
-  String _formatDate(DateTime dt) {
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inDays == 0) {
-      return "Aujourd'hui ${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}";
-    }
-    if (diff.inDays == 1) return 'Hier';
-    return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-  }
 }
 
-// ── Sheet de retrait ─────────────────────────────────────────────────────────
+// ── Feuille de retrait ───────────────────────────────────────────────────────
 
 class _RetraitSheet extends StatefulWidget {
   const _RetraitSheet();
@@ -461,8 +359,18 @@ class _RetraitSheetState extends State<_RetraitSheet> {
 
   static const _methodes = [
     ('orange_money', 'Orange Money'),
-    ('mtn_money', 'MTN Money'),
+    ('mtn_money', 'MTN MoMo'),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Par défaut : tout le solde, vers le numéro du compte.
+    final solde = context.read<WalletProvider>().summary?.soldeDisponible ?? 0;
+    _montantCtrl.text = solde.floor().toString();
+    final phone = context.read<AuthProvider>().user?.phone;
+    if (phone != null && phone.isNotEmpty) _numCtrl.text = GuineaPhone.toLocal(phone);
+  }
 
   @override
   void dispose() {
@@ -471,7 +379,10 @@ class _RetraitSheetState extends State<_RetraitSheet> {
     super.dispose();
   }
 
+  double? get _montant => double.tryParse(_montantCtrl.text.replaceAll(' ', '').replaceAll(',', '.'));
+
   Future<void> _submit() async {
+    if (_loading) return;
     setState(() {
       _numeroServerError = null;
       _montantServerError = null;
@@ -487,11 +398,9 @@ class _RetraitSheetState extends State<_RetraitSheet> {
     }
 
     setState(() => _loading = true);
-    final montant =
-        double.parse(_montantCtrl.text.replaceAll(' ', '').replaceAll(',', '.'));
     try {
       final error = await context.read<WalletProvider>().demanderRetrait(
-            montant: montant,
+            montant: _montant!,
             methode: _methode,
             numeroPaiement: numero,
           );
@@ -517,105 +426,162 @@ class _RetraitSheetState extends State<_RetraitSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final wallet = context.watch<WalletProvider>();
-    final solde = wallet.summary?.soldeDisponible ?? 0;
+    final solde = context.watch<WalletProvider>().summary?.soldeDisponible ?? 0;
+    final montant = _montant;
 
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 32,
-      ),
+    return AppSheet(
       child: Form(
         key: _formKey,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppTheme.divider,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
+            const Text('Retirer mes gains', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+            const SizedBox(height: 4),
+            Text(
+              'Disponible : ${AppCurrency.format(solde)} · minimum ${AppCurrency.format(_retraitMinimum)}',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
             ),
             const SizedBox(height: 20),
-            Text('Retirer mes gains',
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 4),
-            Text('Disponible : ${AppCurrency.format(solde)}',
-                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
-            const SizedBox(height: 20),
-            AppFormField(
+
+            // ── Montant ──
+            TextFormField(
               controller: _montantCtrl,
-              label: 'Montant (GNF)',
-              icon: Icons.payments_outlined,
               keyboardType: TextInputType.number,
-              serverError: _montantServerError,
-              onChanged: (_) {
-                if (_montantServerError != null) {
-                  setState(() => _montantServerError = null);
-                }
-              },
+              style: AppTheme.mono(size: 32, weight: FontWeight.w800, color: AppTheme.textPrimary, spacing: -0.5),
+              onChanged: (_) => setState(() => _montantServerError = null),
+              decoration: InputDecoration(
+                labelText: 'Montant',
+                suffixText: 'GNF',
+                errorText: _montantServerError,
+                filled: true,
+                fillColor: AppTheme.background,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  borderSide: BorderSide.none,
+                ),
+              ),
               validator: (v) {
-                if (v == null || v.isEmpty) return 'Montant requis';
-                final m =
-                    double.tryParse(v.replaceAll(' ', '').replaceAll(',', '.'));
+                final m = _montant;
+                if (v == null || v.isEmpty) return 'Indiquez un montant';
                 if (m == null || m <= 0) return 'Montant invalide';
-                if (m < 5000) return 'Minimum 5 000 GNF';
-                if (m > solde) return 'Gains insuffisants';
+                if (m < _retraitMinimum) return 'Minimum ${AppCurrency.format(_retraitMinimum)}';
+                if (m > solde) return 'C\'est plus que vos gains disponibles';
                 return null;
               },
             ),
-            const SizedBox(height: 14),
-            DropdownButtonFormField<String>(
-              value: _methode,
-              decoration: const InputDecoration(
-                labelText: 'Méthode',
-                prefixIcon: Icon(Icons.account_balance_wallet_outlined),
-              ),
-              items: _methodes
-                  .map((m) => DropdownMenuItem(value: m.$1, child: Text(m.$2)))
-                  .toList(),
-              onChanged: (v) => setState(() => _methode = v ?? _methode),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                if (solde >= 10000 && solde != 10000)
+                  _Choix(
+                    label: AppCurrency.format(10000),
+                    choisi: montant == 10000,
+                    onTap: () => setState(() => _montantCtrl.text = '10000'),
+                  ),
+                _Choix(
+                  label: 'Tout retirer',
+                  choisi: montant == solde.floorToDouble(),
+                  onTap: () => setState(() => _montantCtrl.text = solde.floor().toString()),
+                ),
+              ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 20),
+
+            // ── Opérateur ──
+            const Text('Vers', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary)),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                for (var i = 0; i < _methodes.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: _Tuile(
+                      label: _methodes[i].$2,
+                      choisie: _methode == _methodes[i].$1,
+                      onTap: () => setState(() => _methode = _methodes[i].$1),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
             GuineaPhoneField(
               controller: _numCtrl,
               label: 'Numéro Mobile Money',
               errorText: _numeroServerError,
               onChanged: (_) {
-                if (_numeroServerError != null) {
-                  setState(() => _numeroServerError = null);
-                }
+                if (_numeroServerError != null) setState(() => _numeroServerError = null);
               },
             ),
             const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _loading ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-                  ),
-                ),
-                child: _loading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Text('Confirmer le retrait'),
-              ),
+            PrimaryCta(
+              label: montant != null && montant > 0 ? 'Retirer ${AppCurrency.format(montant)}' : 'Retirer',
+              loading: _loading,
+              onPressed: _submit,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'L\'argent arrive en général en quelques minutes.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Choix extends StatelessWidget {
+  final String label;
+  final bool choisi;
+  final VoidCallback onTap;
+  const _Choix({required this.label, required this.choisi, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: choisi,
+      onSelected: (_) => onTap(),
+      showCheckmark: false,
+      labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: choisi ? AppTheme.accentDark : AppTheme.textPrimary),
+      backgroundColor: AppTheme.cardBg,
+      selectedColor: AppTheme.accentLight,
+      side: BorderSide(color: choisi ? AppTheme.accent : AppTheme.divider, width: 2),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusSm)),
+      materialTapTargetSize: MaterialTapTargetSize.padded,
+    );
+  }
+}
+
+class _Tuile extends StatelessWidget {
+  final String label;
+  final bool choisie;
+  final VoidCallback onTap;
+  const _Tuile({required this.label, required this.choisie, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      selected: choisie,
+      button: true,
+      child: Material(
+        color: choisie ? AppTheme.accentLight : AppTheme.cardBg,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          side: BorderSide(color: choisie ? AppTheme.accent : AppTheme.divider, width: 2),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          child: SizedBox(
+            height: 56,
+            child: Center(
+              child: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppTheme.textPrimary)),
+            ),
+          ),
         ),
       ),
     );
