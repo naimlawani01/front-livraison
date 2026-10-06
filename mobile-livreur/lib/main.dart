@@ -178,7 +178,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
       );
     }
     if (_onboardingSeen == null) {
-      return const Scaffold(backgroundColor: AppTheme.white);
+      return const Scaffold(backgroundColor: AppTheme.background);
     }
     if (_onboardingSeen == false) {
       return OnboardingScreen(
@@ -214,7 +214,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         // NOT during a regular `login()` call — otherwise the LoginScreen
         // gets unmounted mid-login and loses its inline error state.
         if (authProvider.isInitializing) {
-          return const Scaffold(backgroundColor: AppTheme.white);
+          return const Scaffold(backgroundColor: AppTheme.background);
         }
         if (!kIsWeb) FlutterNativeSplash.remove();
         if (authProvider.isAuthenticated) {

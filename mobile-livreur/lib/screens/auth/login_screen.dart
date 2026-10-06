@@ -51,9 +51,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       final success = await auth.login(phone, _passwordController.text);
       if (!mounted) return;
       if (!success) {
-        final msg = auth.error ?? 'Identifiants incorrects';
+        final msg = auth.error ?? 'Numéro ou mot de passe incorrect';
         setState(() => _globalError = msg);
-        UIUtils.showError(context, msg);
       }
     } on ApiValidationException catch (e) {
       if (!mounted) return;
@@ -62,178 +61,145 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         _passwordServerError = e.fieldErrors['password'];
         if (e.fieldErrors.isEmpty) _globalError = e.message;
       });
-      if (e.fieldErrors.isEmpty) UIUtils.showError(context, e.message);
     } on FormatException catch (e) {
       if (mounted) setState(() => _phoneServerError = e.message);
     } catch (e) {
       if (mounted) {
         final msg = e.toString().replaceFirst('Exception: ', '');
         setState(() => _globalError = msg);
-        UIUtils.showError(context, msg);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final loading = context.watch<AuthProvider>().isLoading;
     return Scaffold(
-      backgroundColor: AppTheme.white,
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         child: FadeTransition(
           opacity: _fadeAnim,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Spacer(),
-
-                // Logo + Title (centrés)
-                Center(
+          // Défilable : le clavier ne doit jamais masquer le bouton.
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      const Spacer(),
                       Image.asset(
                         'assets/branding/logo_mark_tight.png',
-                        width: 96,
-                        height: 96,
+                        width: 80,
+                        height: 80,
                         fit: BoxFit.contain,
                       ),
                       const SizedBox(height: 24),
                       const Text(
-                        'Sönaiyaa',
-                        style: TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 30,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.8,
-                          height: 1.15,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Connectez-vous pour voir vos courses',
+                        'Sönaiyaa Livreur',
                         textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 15,
-                          height: 1.4,
+                        style: TextStyle(color: AppTheme.textPrimary, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.8),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Connectez-vous pour recevoir des courses',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: AppTheme.textSecondary, fontSize: 15, fontWeight: FontWeight.w600, height: 1.4),
+                      ),
+                      const SizedBox(height: 32),
+                      Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (_globalError != null) ...[
+                              _MessageErreur(message: _globalError!),
+                              const SizedBox(height: 16),
+                            ],
+                            GuineaPhoneField(
+                              controller: _phoneController,
+                              label: 'Numéro de téléphone',
+                              errorText: _phoneServerError,
+                              textInputAction: TextInputAction.next,
+                              onChanged: (_) {
+                                if (_phoneServerError != null) setState(() => _phoneServerError = null);
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            AppFormField(
+                              controller: _passwordController,
+                              label: 'Mot de passe',
+                              icon: Icons.lock_outline_rounded,
+                              obscureText: _obscurePassword,
+                              serverError: _passwordServerError,
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) => _handleLogin(),
+                              onChanged: (_) {
+                                if (_passwordServerError != null) setState(() => _passwordServerError = null);
+                              },
+                              suffix: IconButton(
+                                tooltip: _obscurePassword ? 'Afficher le mot de passe' : 'Masquer le mot de passe',
+                                icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, size: 20),
+                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                              ),
+                              validator: (v) => (v == null || v.isEmpty) ? 'Saisissez votre mot de passe' : null,
+                            ),
+                            const SizedBox(height: 24),
+                            PrimaryCta(label: 'Se connecter', loading: loading, onPressed: _handleLogin),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 36),
-
-                Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (_globalError != null) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          margin: const EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            color: AppTheme.errorLight,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.error.withValues(alpha: 0.3)),
-                          ),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                      const Spacer(),
+                      const SizedBox(height: 24),
+                      TextButton(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen())),
+                        child: const Text.rich(
+                          TextSpan(
+                            text: 'Pas encore livreur Sönaiyaa ? ',
+                            style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
                             children: [
-                              const Icon(Icons.error_outline_rounded, color: AppTheme.error, size: 20),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  _globalError!,
-                                  style: const TextStyle(
-                                    color: AppTheme.error,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ),
+                              TextSpan(text: 'Créer un compte', style: TextStyle(color: AppTheme.accentDark, fontWeight: FontWeight.w800)),
                             ],
                           ),
                         ),
-                      ],
-                      GuineaPhoneField(
-                        controller: _phoneController,
-                        label: 'Numéro de téléphone',
-                        errorText: _phoneServerError,
-                        onChanged: (_) {
-                          if (_phoneServerError != null) {
-                            setState(() => _phoneServerError = null);
-                          }
-                        },
                       ),
-                      const SizedBox(height: 12),
-                      AppFormField(
-                        controller: _passwordController,
-                        label: 'Mot de passe',
-                        icon: Icons.lock_outline_rounded,
-                        obscureText: _obscurePassword,
-                        serverError: _passwordServerError,
-                        onChanged: (_) {
-                          if (_passwordServerError != null) {
-                            setState(() => _passwordServerError = null);
-                          }
-                        },
-                        suffix: IconButton(
-                          icon: Icon(
-                            _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                            size: 20, color: AppTheme.textTertiary,
-                          ),
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                        ),
-                        validator: (v) => (v == null || v.isEmpty) ? 'Mot de passe requis' : null,
-                      ),
-                      const SizedBox(height: 24),
-                      Consumer<AuthProvider>(
-                        builder: (context, auth, _) {
-                          return SizedBox(
-                            width: double.infinity,
-                            height: 52,
-                            child: ElevatedButton(
-                              onPressed: auth.isLoading ? null : _handleLogin,
-                              child: auth.isLoading
-                                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: AppTheme.white, strokeWidth: 2))
-                                  : const Text('Se connecter'),
-                            ),
-                          );
-                        },
-                      ),
+                      const SizedBox(height: 16),
                     ],
                   ),
                 ),
-
-                const Spacer(),
-
-                Center(
-                  child: TextButton(
-                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen())),
-                    child: const Text.rich(
-                      TextSpan(
-                        text: 'Pas encore membre ? ',
-                        style: TextStyle(color: AppTheme.textTertiary, fontSize: 14),
-                        children: [
-                          TextSpan(
-                            text: 'Créer un compte',
-                            style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-              ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Message d'erreur global du formulaire (identifiants refusés, réseau…).
+class _MessageErreur extends StatelessWidget {
+  final String message;
+  const _MessageErreur({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.errorLight,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded, color: AppTheme.error, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(message, style: const TextStyle(color: AppTheme.error, fontSize: 13, fontWeight: FontWeight.w600, height: 1.4)),
+          ),
+        ],
       ),
     );
   }
