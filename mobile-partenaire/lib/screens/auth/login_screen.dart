@@ -89,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Spacer(),
+                      const Spacer(flex: 2),
                       Image.asset(
                         'assets/branding/logo_mark_tight.png',
                         width: 80,
@@ -100,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       const Text(
                         'Sönaiyaa Expéditeur',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: AppTheme.textPrimary, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.8),
+                        style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6),
                       ),
                       const SizedBox(height: 8),
                       const Text(
@@ -120,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             ],
                             GuineaPhoneField(
                               controller: _phoneController,
-                              label: 'Numéro de téléphone',
+                              label: 'Téléphone',
                               errorText: _phoneServerError,
                               textInputAction: TextInputAction.next,
                               onChanged: (_) {
@@ -151,20 +151,24 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                           ],
                         ),
                       ),
-                      const Spacer(),
-                      const SizedBox(height: 24),
-                      TextButton(
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen())),
-                        child: const Text.rich(
-                          TextSpan(
-                            text: 'Pas encore de compte ? ',
-                            style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
-                            children: [
-                              TextSpan(text: 'Créer un compte', style: TextStyle(color: AppTheme.accentDark, fontWeight: FontWeight.w800)),
-                            ],
+                      const SizedBox(height: 8),
+                      // Lien d'inscription juste sous le bouton, centré, sur une ligne.
+                      Center(
+                        child: TextButton(
+                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const RegisterScreen())),
+                          child: const Text.rich(
+                            TextSpan(
+                              text: 'Pas encore de compte ? ',
+                              style: TextStyle(color: AppTheme.textSecondary, fontWeight: FontWeight.w600),
+                              children: [
+                                TextSpan(text: 'Créer un compte', style: TextStyle(color: AppTheme.accentDark, fontWeight: FontWeight.w800)),
+                              ],
+                            ),
+                            textAlign: TextAlign.center,
                           ),
                         ),
                       ),
+                      const Spacer(flex: 3),
                       const SizedBox(height: 16),
                     ],
                   ),

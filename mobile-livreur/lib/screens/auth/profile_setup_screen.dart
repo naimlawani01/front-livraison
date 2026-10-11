@@ -104,7 +104,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> with SingleTick
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Text('Complétez votre profil', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.8)),
+                  const Text('Complétez votre profil', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.6)),
                   const SizedBox(height: 8),
                   const Text(
                     'Ces informations sont nécessaires pour commencer à livrer.',

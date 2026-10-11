@@ -153,7 +153,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
               children: [
                 Image.asset('assets/branding/logo_mark_tight.png', width: 56, height: 56, fit: BoxFit.contain),
                 const SizedBox(height: 24),
-                const Text('Devenir livreur', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.8)),
+                const Text('Devenir livreur', style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppTheme.textPrimary, letterSpacing: -0.6)),
                 const SizedBox(height: 8),
                 const Text(
                   'Recevez des courses près de chez vous et soyez payé à chaque livraison.',
