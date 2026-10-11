@@ -20,36 +20,49 @@ class PrimaryCta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enabled = onPressed != null && !loading;
+    final radius = BorderRadius.circular(AppTheme.radiusLg);
     return Semantics(
       button: true,
       enabled: enabled,
       label: label,
-      child: Material(
-        color: Colors.transparent,
-        child: Ink(
-          height: 64,
-          decoration: BoxDecoration(
-            gradient: onPressed != null ? AppTheme.ctaGradient : null,
-            color: onPressed != null ? null : AppTheme.divider,
-            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-            boxShadow: onPressed != null ? AppTheme.shadowLg : null,
-          ),
-          child: InkWell(
-            onTap: enabled ? onPressed : null,
-            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
-            child: Center(
-              child: loading
-                  ? const BrandDotsPulse()
-                  : Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: onPressed != null ? AppTheme.white : AppTheme.textSecondary,
+      excludeSemantics: true,
+      // L'ombre est portée par une boîte AUTOUR de la surface Material : dessinée
+      // dans l'Ink, elle était coupée net par le rectangle du Material (bande
+      // claire à angles droits sous le bouton).
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          boxShadow: onPressed != null ? AppTheme.shadowLg : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: radius),
+          clipBehavior: Clip.antiAlias,
+          child: Ink(
+            height: 64,
+            decoration: BoxDecoration(
+              gradient: onPressed != null ? AppTheme.ctaGradient : null,
+              color: onPressed != null ? null : AppTheme.divider,
+            ),
+            child: InkWell(
+              onTap: enabled ? onPressed : null,
+              child: Center(
+                child: loading
+                    ? const BrandDotsPulse()
+                    : Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: onPressed != null ? AppTheme.white : AppTheme.textSecondary,
+                          ),
+                        ),
                       ),
-                    ),
+              ),
             ),
           ),
         ),
