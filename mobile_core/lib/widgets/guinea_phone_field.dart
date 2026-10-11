@@ -58,13 +58,13 @@ class GuineaPhoneField extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: const [
-              Text(GuineaPhone.flag, style: TextStyle(fontSize: 18)),
-              SizedBox(width: 6),
+              // Pas de drapeau emoji : mal rendu sur certains appareils (« ?? »)
+              // et le skill de design exclut les emojis des écrans.
               Text(
                 GuineaPhone.countryCode,
                 style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
                   color: AppTheme.textPrimary,
                 ),
               ),
