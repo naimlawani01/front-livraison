@@ -100,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       const Text(
                         'Sönaiyaa Livreur',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: AppTheme.textPrimary, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: -0.8),
+                        style: TextStyle(color: AppTheme.textPrimary, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: -0.6),
                       ),
                       const SizedBox(height: 8),
                       const Text(

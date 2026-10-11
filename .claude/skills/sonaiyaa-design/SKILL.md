@@ -30,6 +30,7 @@ dans un écran : si un token manque, on l'ajoute à `AppTheme`.
 | Rayons | `radiusSm 12` · `radiusMd 16` · `radiusLg 20` · `radiusXl 28` | pas d'autres valeurs |
 
 - **Police** : Manrope partout (`GoogleFonts.manrope`). **4 tailles max par écran**, 2 graisses (600 / 800).
+  Échelle de référence : **13** (aide, libellés) · **15** (texte courant) · **17** (bouton principal) · **20** (titre d'écran) · **26** (titre des écrans d'accueil / connexion) · **32–40** réservés aux **montants** héros. Ne pas mettre de texte (hors montant) au-delà de 26.
 - **Montants** : toujours `AppTheme.mono(...)` (chiffres tabulaires) et `AppCurrency.format(...)`.
   La **valeur** est plus grande que son étiquette (« 8 800 GNF » > « Vos gains »).
 - **Espacements** : multiples de 4 (4, 8, 12, 16, 20, 24, 32). Écart entre groupes = 2× l'écart interne.

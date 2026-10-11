@@ -56,7 +56,7 @@ class PrimaryCta extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 20,
+                            fontSize: 17,
                             fontWeight: FontWeight.w800,
                             color: onPressed != null ? AppTheme.white : AppTheme.textSecondary,
                           ),
